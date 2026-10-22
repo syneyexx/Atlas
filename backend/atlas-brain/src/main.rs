@@ -33,7 +33,7 @@ async fn main() {
     let config = BrainConfig::load_or_init(data_dir).expect("brain config");
     let bind = config.bind.clone();
     let cors_origins = config.cors_origins.clone();
-    let store = Store::open(&config.data_dir).expect("open atlas store");
+    let store = Store::open(&config).expect("open atlas store");
 
     let state = AppState {
         config: Arc::new(RwLock::new(config)),

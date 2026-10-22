@@ -10,6 +10,9 @@
 | `README.md` | meta | Intro |
 | `docs/datanames.md` | docs | Architectuurkaart |
 | `docs/filenames.md` | docs | Deze index |
+| `docs/plan-stores-architecture.md` | store-plane | Wereldklasse stores-plan (28 logical / gefaseerde engines) |
+| `docs/engines.md` | scale-adapters | M5 engine config (Postgres/Redis/S3) |
+| `docker-compose.yml` | scale-adapters | Postgres + Redis + MinIO |
 | `frontend/` | frontend | React UI |
 | `backend/atlas-brain/` | atlas-brain | Brain + Memory Cortex |
 
@@ -41,8 +44,14 @@
 | `backend/atlas-brain/src/api/config_api.rs` | config-plane | Settings HTTP |
 | `backend/atlas-brain/src/api/conversations.rs` | conversation-memory | CRUD |
 | `backend/atlas-brain/src/api/models.rs` | local-lm-client | Models list |
+| `backend/atlas-brain/src/api/store_api.rs` | store-plane | traces / outbox / edges HTTP |
+| `backend/atlas-brain/src/api/documents.rs` | document-rag | document ingest / search / CRUD |
+| `backend/atlas-brain/src/api/agent_api.rs` | agent-os | tools / tasks / prompts / model registry |
+| `backend/atlas-brain/src/api/eval_api.rs` | improvement-loop | evals / feedback / training / cache |
+| `backend/atlas-brain/src/api/platform_api.rs` | scale-adapters | engines / projects / artifacts / costs / secrets / code |
 | `backend/atlas-brain/src/lm/client.rs` | local-lm-client | LM HTTP/stub |
-| `backend/atlas-brain/src/brain/pipeline.rs` | neural-pipeline | Cortex → LM |
+| `backend/atlas-brain/src/brain/pipeline.rs` | neural-pipeline | Cortex → LM + durable trace |
+| `backend/atlas-brain/rust-toolchain.toml` | atlas-brain | Pin stable rustc |
 
 ## Backend — Memory Cortex
 
@@ -50,7 +59,8 @@
 |---------|--------------|-----|
 | `backend/atlas-brain/src/memory/mod.rs` | memory-cortex | Root |
 | `backend/atlas-brain/src/memory/types.rs` | memory-cortex | Nodes, provenance, trace |
-| `backend/atlas-brain/src/memory/write.rs` | memory-cortex | Write Governor |
+| `backend/atlas-brain/src/memory/write.rs` | memory-cortex | Write Governor (+ conflict/truth, procedural) |
+| `backend/atlas-brain/src/memory/ingest.rs` | document-rag | Document → objects + chunks + memory |
 | `backend/atlas-brain/src/memory/embed.rs` | memory-cortex | Embedders |
 | `backend/atlas-brain/src/memory/attention.rs` | memory-cortex | Multi-head recall |
 | `backend/atlas-brain/src/memory/moe.rs` | memory-cortex | MoE router + expert_top_k (M4) |
@@ -59,9 +69,22 @@
 | `backend/atlas-brain/src/memory/residual.rs` | memory-cortex | ContextStream + budget |
 | `backend/atlas-brain/src/memory/cortex.rs` | memory-cortex | Orchestrator hops/salience/KV |
 | `backend/atlas-brain/src/memory/decay.rs` | memory-cortex | On-read decay + bump/soften |
-| `backend/atlas-brain/src/store/db.rs` | store | SQLite open |
-| `backend/atlas-brain/src/store/memory.rs` | memory-cortex store | nodes, embeddings, working_memory, migrate |
-| `backend/atlas-brain/src/store/conversations.rs` | conversation-memory | Types |
+| `backend/atlas-brain/src/store/db.rs` | store / store-plane | SQLite open + migrations |
+| `backend/atlas-brain/src/store/plane.rs` | store-plane | M0 schema: messages/FTS/edges/traces/outbox |
+| `backend/atlas-brain/src/store/memory.rs` | memory-cortex store | nodes, embeddings+model_id, FTS, working_memory |
+| `backend/atlas-brain/src/store/conversations.rs` | conversation-memory | Types + normalized messages + FTS |
+| `backend/atlas-brain/src/store/documents.rs` | document-rag | documents + chunks + FTS |
+| `backend/atlas-brain/src/store/objects.rs` | document-rag | Content-addressed blob put/get |
+| `backend/atlas-brain/src/store/tools.rs` | agent-os | Tool registry + policy |
+| `backend/atlas-brain/src/store/tasks.rs` | agent-os | Tasks + checkpoints |
+| `backend/atlas-brain/src/store/prompts.rs` | agent-os | Prompt versions + model registry |
+| `backend/atlas-brain/src/store/eval.rs` | improvement-loop | eval/feedback/training/cache tables |
+| `backend/atlas-brain/src/memory/eval_runner.rs` | improvement-loop | Request-driven eval suite runner |
+| `backend/atlas-brain/src/store/edges.rs` | store-plane | memory_edges CRUD |
+| `backend/atlas-brain/src/store/traces.rs` | store-plane | Append-only audit traces |
+| `backend/atlas-brain/src/store/outbox.rs` | store-plane | Durable events (request-drain) |
+| `backend/atlas-brain/src/store/platform.rs` | scale-adapters | projects / artifacts / costs / secrets / code index |
+| `backend/atlas-brain/src/store/engines/` | scale-adapters | EngineBundle · Postgres · Redis · S3 · pg_mirror |
 | `backend/atlas-brain/src/store/knowledge.rs` | knowledge-store | Legacy types |
 
 ## Runtime data (niet in git)
@@ -69,4 +92,5 @@
 | Pad | Rol |
 |-----|-----|
 | `…/data/brain-config.json` | Settings |
-| `…/data/atlas.db` | conversations, knowledge, memory_*, working_memory |
+| `…/data/atlas.db` | conversations, messages, knowledge, memory_*, documents, traces, outbox |
+| `…/data/objects/` | Content-addressed blobs (sha256) |

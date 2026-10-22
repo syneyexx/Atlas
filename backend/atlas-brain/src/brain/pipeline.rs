@@ -1,10 +1,20 @@
+use crate::config::BrainConfig;
 use crate::error::{AtlasError, AtlasResult};
 use crate::lm::{CompletionRequest, LmMessage, LocalLmClient};
+use crate::memory::types::MemoryTrace;
 use crate::memory::{recall_into_context, EmbedClient};
-use crate::config::BrainConfig;
 use crate::store::{ChatMessage, Store};
+use serde_json::json;
 
-/// One-brain completion: Memory Cortex residual → local LM.
+pub struct CompletionOutcome {
+    pub answer: String,
+    pub trace_id: Option<String>,
+    #[allow(dead_code)]
+    pub recall_trace: Option<MemoryTrace>,
+    pub hit_ids: Vec<String>,
+}
+
+/// One-brain completion: Memory Cortex residual → local LM (+ optional durable trace).
 pub async fn run_completion(
     cfg: &BrainConfig,
     store: &Store,
@@ -12,7 +22,7 @@ pub async fn run_completion(
     embed: &EmbedClient,
     conversation: &[ChatMessage],
     conversation_id: Option<&str>,
-) -> AtlasResult<String> {
+) -> AtlasResult<CompletionOutcome> {
     if cfg.model_id.trim().is_empty() {
         return Err(AtlasError::BadRequest(
             "Geen model_id geconfigureerd. Stel het model in via Settings.".into(),
@@ -30,6 +40,9 @@ pub async fn run_completion(
         .find(|m| m.role == "user")
         .map(|m| m.content.as_str())
         .unwrap_or("");
+
+    let mut recall_trace = None;
+    let mut hit_ids = Vec::new();
 
     let messages = if cfg.knowledge_top_k == 0 {
         // Memory injection disabled — still honor SYSTEM_PROMPT from settings.
@@ -62,9 +75,11 @@ pub async fn run_completion(
             query,
             conversation,
             conversation_id,
-            false,
+            true, // always build forensic trace for durable store
         )
         .await?;
+        hit_ids = recalled.hits.iter().map(|h| h.id.clone()).collect();
+        recall_trace = Some(recalled.emit.trace);
         recalled
             .emit
             .messages
@@ -73,12 +88,38 @@ pub async fn run_completion(
             .collect()
     };
 
-    lm.complete(
-        cfg,
-        CompletionRequest {
-            model: cfg.model_id.clone(),
-            messages,
-        },
-    )
-    .await
+    let answer = lm
+        .complete(
+            cfg,
+            CompletionRequest {
+                model: cfg.model_id.clone(),
+                messages,
+            },
+        )
+        .await?;
+
+    let trace_id = {
+        let payload = json!({
+            "query": query,
+            "hit_ids": hit_ids,
+            "recall": recall_trace.clone(),
+            "answer_chars": answer.chars().count(),
+            "model_id": cfg.model_id,
+            "embed_model": crate::memory::write::embed_model_key(cfg),
+        });
+        match store.insert_trace("chat", conversation_id, Some(cfg.model_id.as_str()), &payload) {
+            Ok(id) => Some(id),
+            Err(err) => {
+                tracing::warn!("trace persist failed: {err}");
+                None
+            }
+        }
+    };
+
+    Ok(CompletionOutcome {
+        answer,
+        trace_id,
+        recall_trace,
+        hit_ids,
+    })
 }

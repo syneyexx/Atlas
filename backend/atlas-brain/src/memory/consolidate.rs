@@ -137,15 +137,16 @@ pub async fn consolidate_episodic(
             scope: Some("global".into()),
             confidence: Some(0.75),
             conversation_id: req.conversation_id.clone(),
+            parent_ids: source_ids.clone(),
         },
     )
     .await?;
 
-    // Attach parent provenance when inserted/merged.
+    // Attach parent provenance when inserted/merged/conflicted.
     if let Some(node) = decision.node.as_mut() {
         if matches!(
             decision.action,
-            WriteAction::Inserted | WriteAction::Merged
+            WriteAction::Inserted | WriteAction::Merged | WriteAction::Conflicted
         ) {
             node.provenance.parent_ids = source_ids.clone();
             node.updated_at = chrono::Utc::now().to_rfc3339();

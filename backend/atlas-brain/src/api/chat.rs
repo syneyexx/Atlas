@@ -44,14 +44,21 @@ pub async fn chat_completions(
         cfg.model_id = model.clone();
     }
 
+    // Request-driven: mark vectors from other embed models stale (no sweeper).
+    let embed_key = crate::memory::write::embed_model_key(&cfg);
+    let _ = state.store.mark_embeddings_stale_except(&embed_key);
+
     let conversation: Vec<ChatMessage> = body
         .messages
         .into_iter()
         .map(|m| ChatMessage {
+            id: Some(Uuid::new_v4().to_string()),
             role: m.role,
             content: m.content,
             created_at: None,
             callout: None,
+            trace_id: None,
+            model_id: None,
         })
         .collect();
 
@@ -59,7 +66,45 @@ pub async fn chat_completions(
         .conversation_id
         .clone()
         .filter(|s| !s.is_empty());
-    let answer = run_completion(
+
+    let user_msg = conversation
+        .iter()
+        .rev()
+        .find(|m| m.role == "user")
+        .map(|m| m.content.as_str())
+        .unwrap_or("");
+    let cache_key = if cfg.semantic_cache_enabled {
+        Some(crate::api::eval_api::semantic_cache_key(
+            &cfg.model_id,
+            &cfg.system_prompt,
+            user_msg,
+        ))
+    } else {
+        None
+    };
+    if let Some(ref key) = cache_key {
+        if let Ok(Some(hit)) = state.store.cache_get(key) {
+            return Ok(Json(json!({
+                "id": format!("chatcmpl-{}", Uuid::new_v4()),
+                "object": "chat.completion",
+                "created": Utc::now().timestamp(),
+                "model": cfg.model_id,
+                "atlas": {
+                    "conversation_id": conversation_id,
+                    "cache_hit": true,
+                    "cache_key": key,
+                },
+                "choices": [{
+                    "index": 0,
+                    "message": { "role": "assistant", "content": hit.response },
+                    "finish_reason": "stop"
+                }]
+            })));
+        }
+    }
+
+    let started = std::time::Instant::now();
+    let outcome = run_completion(
         &cfg,
         &state.store,
         &state.lm,
@@ -68,6 +113,29 @@ pub async fn chat_completions(
         conversation_id.as_deref(),
     )
     .await?;
+    let latency_ms = started.elapsed().as_millis() as i64;
+    // Approx token ledger (chars/4); cost_usd stays 0 until model pricing is configured.
+    let token_in = conversation
+        .iter()
+        .map(|m| (m.content.chars().count() + 3) / 4)
+        .sum::<usize>() as i64;
+    let token_out = ((outcome.answer.chars().count() + 3) / 4) as i64;
+    let _ = state.store.insert_cost(&crate::store::CostEntry {
+        id: Uuid::new_v4().to_string(),
+        trace_id: outcome.trace_id.clone(),
+        conversation_id: conversation_id.clone(),
+        model_id: Some(cfg.model_id.clone()),
+        token_in,
+        token_out,
+        latency_ms,
+        cost_usd: 0.0,
+        created_at: Utc::now().to_rfc3339(),
+    });
+    if let Some(ref key) = cache_key {
+        let _ = state
+            .store
+            .cache_put(key, &outcome.answer, &cfg.model_id);
+    }
     let created = Utc::now().timestamp();
     let persist = body.persist.unwrap_or(true);
 
@@ -89,10 +157,13 @@ pub async fn chat_completions(
             });
         let mut messages = conversation.clone();
         messages.push(ChatMessage {
+            id: Some(Uuid::new_v4().to_string()),
             role: "assistant".into(),
-            content: answer.clone(),
+            content: outcome.answer.clone(),
             created_at: Some(Utc::now().to_rfc3339()),
             callout: None,
+            trace_id: outcome.trace_id.clone(),
+            model_id: Some(cfg.model_id.clone()),
         });
         state.store.upsert_conversation(&ConversationRecord {
             id: id.clone(),
@@ -118,6 +189,7 @@ pub async fn chat_completions(
                     scope: Some("conversation".into()),
                     confidence: Some(0.65),
                     conversation_id: Some(id.clone()),
+                    parent_ids: Vec::new(),
                 },
             )
             .await;
@@ -142,14 +214,33 @@ pub async fn chat_completions(
         }
     }
 
+    // Request-driven outbox drain (no background sweeper).
+    let drain = state.store.drain_outbox(32).unwrap_or_else(|_| {
+        crate::store::DrainResult {
+            seen: 0,
+            processed: 0,
+            by_type: Default::default(),
+        }
+    });
+
     Ok(Json(json!({
         "id": format!("chatcmpl-{}", Uuid::new_v4()),
         "object": "chat.completion",
         "created": created,
         "model": cfg.model_id,
+        "atlas": {
+            "conversation_id": id,
+            "trace_id": outcome.trace_id,
+            "hit_ids": outcome.hit_ids,
+            "outbox_drained": drain.processed,
+            "token_in": token_in,
+            "token_out": token_out,
+            "latency_ms": latency_ms,
+            "engines": state.store.engine_status(),
+        },
         "choices": [{
             "index": 0,
-            "message": { "role": "assistant", "content": answer },
+            "message": { "role": "assistant", "content": outcome.answer },
             "finish_reason": "stop"
         }]
     })))

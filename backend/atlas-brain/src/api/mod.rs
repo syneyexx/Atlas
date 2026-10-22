@@ -1,9 +1,14 @@
+mod agent_api;
 mod chat;
 mod config_api;
 mod conversations;
+mod documents;
+mod eval_api;
 mod knowledge;
 mod memory_api;
 mod models;
+mod platform_api;
+mod store_api;
 
 use crate::state::AppState;
 use axum::routing::{delete, get, post};
@@ -41,4 +46,96 @@ pub fn router() -> Router<AppState> {
         )
         .route("/v1/atlas/memory/working/{id}", get(memory_api::get_working))
         .route("/v1/atlas/memory/{id}", delete(memory_api::forget))
+        // Store Plane M0
+        .route("/v1/atlas/traces", get(store_api::list_traces))
+        .route("/v1/atlas/traces/{id}", get(store_api::get_trace))
+        .route(
+            "/v1/atlas/outbox",
+            get(store_api::list_outbox).post(store_api::drain_outbox),
+        )
+        .route("/v1/atlas/edges", post(store_api::upsert_edge))
+        .route("/v1/atlas/edges/{id}", get(store_api::list_edges))
+        // Document RAG (M2)
+        .route(
+            "/v1/atlas/documents",
+            get(documents::list).post(documents::ingest),
+        )
+        .route("/v1/atlas/documents/search", get(documents::search))
+        .route(
+            "/v1/atlas/documents/{id}",
+            get(documents::get).delete(documents::delete),
+        )
+        // Agent OS (M3)
+        .route(
+            "/v1/atlas/tools",
+            get(agent_api::list_tools).post(agent_api::upsert_tool),
+        )
+        .route(
+            "/v1/atlas/tools/{name}",
+            get(agent_api::get_tool).put(agent_api::patch_tool),
+        )
+        .route(
+            "/v1/atlas/tasks",
+            get(agent_api::list_tasks).post(agent_api::create_task),
+        )
+        .route("/v1/atlas/tasks/{id}", get(agent_api::get_task))
+        .route(
+            "/v1/atlas/tasks/{id}/checkpoint",
+            post(agent_api::checkpoint_task),
+        )
+        .route(
+            "/v1/atlas/tasks/{id}/status",
+            post(agent_api::set_task_status),
+        )
+        .route(
+            "/v1/atlas/prompts",
+            get(agent_api::list_prompts).post(agent_api::create_prompt),
+        )
+        .route("/v1/atlas/prompts/{id}", get(agent_api::get_prompt))
+        .route(
+            "/v1/atlas/prompts/{id}/activate",
+            post(agent_api::activate_prompt),
+        )
+        .route(
+            "/v1/atlas/models/registry",
+            get(agent_api::list_models_registry).post(agent_api::upsert_model_registry),
+        )
+        // Improvement loop (M4)
+        .route(
+            "/v1/atlas/evals/cases",
+            get(eval_api::list_cases).post(eval_api::upsert_case),
+        )
+        .route("/v1/atlas/evals/run", post(eval_api::run_suite))
+        .route("/v1/atlas/evals/runs", get(eval_api::list_runs))
+        .route(
+            "/v1/atlas/feedback",
+            get(eval_api::list_feedback).post(eval_api::post_feedback),
+        )
+        .route("/v1/atlas/training", get(eval_api::list_training))
+        .route(
+            "/v1/atlas/cache",
+            get(eval_api::cache_lookup)
+                .post(eval_api::cache_put)
+                .delete(eval_api::cache_clear),
+        )
+        // Platform / M5 gap stores
+        .route("/v1/atlas/engines", get(platform_api::engines))
+        .route(
+            "/v1/atlas/projects",
+            get(platform_api::list_projects).post(platform_api::upsert_project),
+        )
+        .route("/v1/atlas/projects/{id}", get(platform_api::get_project))
+        .route(
+            "/v1/atlas/artifacts",
+            get(platform_api::list_artifacts).post(platform_api::create_artifact),
+        )
+        .route("/v1/atlas/costs", get(platform_api::list_costs))
+        .route(
+            "/v1/atlas/secrets",
+            get(platform_api::list_secrets).post(platform_api::put_secret),
+        )
+        .route("/v1/atlas/secrets/{name}", get(platform_api::get_secret))
+        .route("/v1/atlas/code/index", post(platform_api::index_code))
+        .route("/v1/atlas/code/search", get(platform_api::search_code))
+        .route("/v1/atlas/objects/{hash}", get(platform_api::get_object))
 }

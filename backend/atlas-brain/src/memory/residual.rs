@@ -58,8 +58,8 @@ pub fn emit_context(
 
     if cfg.memory_include_router_brief {
         let brief = format!(
-            "[ATLAS_ROUTER] semantic={:.2} episodic={:.2} self={:.2} working={:.2} [/ATLAS_ROUTER]",
-            router.semantic, router.episodic, router.self_profile, router.working
+            "[ATLAS_ROUTER] semantic={:.2} episodic={:.2} self={:.2} working={:.2} procedural={:.2} [/ATLAS_ROUTER]",
+            router.semantic, router.episodic, router.self_profile, router.working, router.procedural
         );
         push_frame(&mut frames, "system", "router", &brief, 100.0);
     }
@@ -71,6 +71,15 @@ pub fn emit_context(
             "semantic",
             &format_hit(hit),
             500.0 + hit.score,
+        );
+    }
+    for hit in fused.iter().filter(|h| h.kind == MemoryKind::Procedural) {
+        push_frame(
+            &mut frames,
+            "system",
+            "procedural",
+            &format_hit(hit),
+            480.0 + hit.score,
         );
     }
     for hit in fused.iter().filter(|h| h.kind == MemoryKind::Episodic) {
@@ -132,15 +141,16 @@ pub fn emit_context(
         kept.push(frame);
     }
 
-    // Restore stable emission order: system_prompt, self, router, semantic, episodic, working, conversation.
+    // Restore stable emission order: system_prompt, self, router, semantic, procedural, episodic, working, conversation.
     let order = |label: &str| match label {
         "system_prompt" => 0,
         "self_profile" => 1,
         "router" => 2,
         "semantic" => 3,
-        "episodic" => 4,
-        "working" => 5,
-        _ => 6,
+        "procedural" => 4,
+        "episodic" => 5,
+        "working" => 6,
+        _ => 7,
     };
     kept.sort_by(|a, b| {
         order(&a.label)

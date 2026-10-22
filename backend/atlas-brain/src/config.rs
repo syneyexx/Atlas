@@ -30,6 +30,8 @@ pub struct BrainConfig {
     pub memory_token_budget: usize,
     pub memory_chunk_chars: usize,
     pub memory_dedupe_threshold: f64,
+    /// Similarity floor for conflict detection (below dedupe, above noise).
+    pub memory_conflict_sim_low: f64,
     pub memory_decay_lambda: f64,
     pub memory_min_salience: f64,
     pub memory_min_hit_score: f64,
@@ -43,6 +45,29 @@ pub struct BrainConfig {
     pub memory_auto_consolidate: bool,
     pub memory_auto_consolidate_min: usize,
     pub memory_write_episodic_on_chat: bool,
+    /// Opt-in semantic answer cache (invalidated via API / model change).
+    pub semantic_cache_enabled: bool,
+
+    // --- M5 engines ---
+    /// `sqlite` | `postgres` | `dual` (sqlite active + postgres durable mirror)
+    pub db_backend: String,
+    /// postgres://… when db_backend is postgres|dual
+    pub database_url: String,
+    /// redis://… for working memory + semantic cache hot path
+    pub redis_url: String,
+    /// `filesystem` | `s3`
+    pub object_backend: String,
+    pub s3_endpoint: String,
+    pub s3_bucket: String,
+    pub s3_region: String,
+    pub s3_access_key: String,
+    pub s3_secret_key: String,
+    /// Hex or raw key material for secrets store (prefer ATLAS_SECRETS_KEY env).
+    pub secrets_key: String,
+    /// Default project scope for new memories/docs when unset.
+    pub default_project_id: String,
+    /// Semantic cache TTL when using Redis (seconds).
+    pub semantic_cache_ttl_secs: u64,
 }
 
 impl Default for BrainConfig {
@@ -68,6 +93,7 @@ impl Default for BrainConfig {
             memory_token_budget: 1800,
             memory_chunk_chars: 1800,
             memory_dedupe_threshold: 0.92,
+            memory_conflict_sim_low: 0.78,
             memory_decay_lambda: 0.002,
             memory_min_salience: 0.02,
             memory_min_hit_score: 0.04,
@@ -79,6 +105,19 @@ impl Default for BrainConfig {
             memory_auto_consolidate: false,
             memory_auto_consolidate_min: 3,
             memory_write_episodic_on_chat: true,
+            semantic_cache_enabled: false,
+            db_backend: "sqlite".into(),
+            database_url: String::new(),
+            redis_url: String::new(),
+            object_backend: "filesystem".into(),
+            s3_endpoint: String::new(),
+            s3_bucket: String::new(),
+            s3_region: "us-east-1".into(),
+            s3_access_key: String::new(),
+            s3_secret_key: String::new(),
+            secrets_key: String::new(),
+            default_project_id: String::new(),
+            semantic_cache_ttl_secs: 3600,
         }
     }
 }
@@ -100,6 +139,7 @@ pub struct PublicSettings {
     pub working_ttl_secs: u64,
     pub memory_auto_consolidate: bool,
     pub consolidate_prompt: String,
+    pub semantic_cache_enabled: bool,
 }
 
 impl From<&BrainConfig> for PublicSettings {
@@ -119,6 +159,7 @@ impl From<&BrainConfig> for PublicSettings {
             working_ttl_secs: c.working_ttl_secs,
             memory_auto_consolidate: c.memory_auto_consolidate,
             consolidate_prompt: c.consolidate_prompt.clone(),
+            semantic_cache_enabled: c.semantic_cache_enabled,
         }
     }
 }
@@ -139,6 +180,7 @@ pub struct PublicSettingsPatch {
     pub working_ttl_secs: Option<u64>,
     pub memory_auto_consolidate: Option<bool>,
     pub consolidate_prompt: Option<String>,
+    pub semantic_cache_enabled: Option<bool>,
 }
 
 impl BrainConfig {
@@ -149,15 +191,56 @@ impl BrainConfig {
     pub fn load_or_init(data_dir: PathBuf) -> AtlasResult<Self> {
         std::fs::create_dir_all(&data_dir)?;
         let path = Self::config_path(&data_dir);
-        if path.exists() {
+        let mut cfg = if path.exists() {
             let raw = std::fs::read_to_string(&path)?;
             let mut cfg: BrainConfig = serde_json::from_str(&raw)?;
             cfg.data_dir = data_dir;
-            return Ok(cfg);
+            cfg
+        } else {
+            let mut cfg = BrainConfig::default();
+            cfg.data_dir = data_dir;
+            cfg.save()?;
+            cfg
+        };
+        // Local dignity: always have a secrets key so encrypted store works out of the box.
+        if cfg.secrets_key.trim().is_empty() {
+            use rand::RngCore;
+            let mut bytes = [0u8; 32];
+            rand::thread_rng().fill_bytes(&mut bytes);
+            cfg.secrets_key = hex::encode(bytes);
+            let _ = cfg.save();
         }
-        let mut cfg = BrainConfig::default();
-        cfg.data_dir = data_dir;
-        cfg.save()?;
+        // Environment overrides (never log secret values).
+        if let Ok(v) = std::env::var("ATLAS_DB_BACKEND") {
+            cfg.db_backend = v;
+        }
+        if let Ok(v) = std::env::var("ATLAS_DATABASE_URL") {
+            cfg.database_url = v;
+        }
+        if let Ok(v) = std::env::var("ATLAS_REDIS_URL") {
+            cfg.redis_url = v;
+        }
+        if let Ok(v) = std::env::var("ATLAS_OBJECT_BACKEND") {
+            cfg.object_backend = v;
+        }
+        if let Ok(v) = std::env::var("ATLAS_S3_ENDPOINT") {
+            cfg.s3_endpoint = v;
+        }
+        if let Ok(v) = std::env::var("ATLAS_S3_BUCKET") {
+            cfg.s3_bucket = v;
+        }
+        if let Ok(v) = std::env::var("ATLAS_S3_REGION") {
+            cfg.s3_region = v;
+        }
+        if let Ok(v) = std::env::var("ATLAS_S3_ACCESS_KEY") {
+            cfg.s3_access_key = v;
+        }
+        if let Ok(v) = std::env::var("ATLAS_S3_SECRET_KEY") {
+            cfg.s3_secret_key = v;
+        }
+        if let Ok(v) = std::env::var("ATLAS_SECRETS_KEY") {
+            cfg.secrets_key = v;
+        }
         Ok(cfg)
     }
 
@@ -231,6 +314,12 @@ impl BrainConfig {
         }
         if let Some(v) = patch.consolidate_prompt {
             self.consolidate_prompt = v;
+        }
+        if let Some(v) = patch.semantic_cache_enabled {
+            self.semantic_cache_enabled = v;
+            if !v {
+                // Turning cache off does not require wipe; explicit clear API exists.
+            }
         }
         self.save()
     }

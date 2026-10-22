@@ -33,6 +33,17 @@ pub fn route_experts(query: &str, prior: Option<&WorkingMemoryState>) -> RouterD
     {
         r.semantic = 0.7;
     }
+    if q.contains("hoe ")
+        || q.contains("stappen")
+        || q.contains("workflow")
+        || q.contains("procedure")
+        || q.contains("skill")
+        || q.contains("werkwijze")
+        || q.contains("recipe")
+        || q.contains("playbook")
+    {
+        r.procedural = 0.75;
+    }
     if q.contains("samenvat") || q.contains("onthoud dit") || q.contains("pin") {
         r.working = 0.55;
         r.episodic = 0.4;
@@ -44,6 +55,7 @@ pub fn route_experts(query: &str, prior: Option<&WorkingMemoryState>) -> RouterD
         r.episodic = 0.65 * r.episodic + 0.35 * prev.last_router.episodic;
         r.semantic = 0.65 * r.semantic + 0.35 * prev.last_router.semantic;
         r.self_profile = 0.65 * r.self_profile + 0.35 * prev.last_router.self_profile;
+        r.procedural = 0.65 * r.procedural + 0.35 * prev.last_router.procedural;
         if !prev.pinned.is_empty() {
             r.working = (r.working + 0.15).min(1.0);
         }
@@ -57,12 +69,14 @@ fn normalize(mut r: RouterDecision) -> RouterDecision {
     r.episodic = r.episodic.max(0.05);
     r.semantic = r.semantic.max(0.05);
     r.self_profile = r.self_profile.max(0.05);
-    let sum = r.working + r.episodic + r.semantic + r.self_profile;
+    r.procedural = r.procedural.max(0.05);
+    let sum = r.working + r.episodic + r.semantic + r.self_profile + r.procedural;
     if sum > 0.0 {
         r.working /= sum;
         r.episodic /= sum;
         r.semantic /= sum;
         r.self_profile /= sum;
+        r.procedural /= sum;
     }
     r
 }

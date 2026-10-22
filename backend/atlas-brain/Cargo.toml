@@ -6,12 +6,20 @@ description = "Atlas 999 Brain Core — local LM, memory, knowledge, one-brain p
 publish = false
 
 [dependencies]
+aes-gcm = "0.10"
 axum = { version = "0.8", features = ["json", "macros"] }
+base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+hex = "0.4"
+hmac = "0.12"
+postgres = { version = "0.19", features = ["with-serde_json-1"] }
+rand = "0.8"
+redis = { version = "0.27", default-features = false, features = ["script"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10"
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync"] }
 tower-http = { version = "0.6", features = ["cors"] }
