@@ -13,10 +13,11 @@ Alles denkt via **Atlas Brain** (`backend/atlas-brain`). De React-UI is alleen h
 ## Architecturen
 
 ### `frontend` — Obsidian Chat UI
-- **Wat:** Pixel-exact React + Vite shell uit `Atlas_999_React.zip`.
+- **Wat:** Pixel-exact React + Vite shell uit `Atlas_999_React.zip` + Research uit `Research_Update.zip`.
 - **Waar:** `frontend/`
-- **Contract:** `/v1/models`, `/v1/chat/completions`, `/v1/atlas/*`.
+- **Contract:** `/v1/models`, `/v1/chat/completions`, `/v1/atlas/*` (incl. research).
 - **State:** `localStorage` cache; bron van waarheid = Brain SQLite + Memory Cortex.
+- **Research UI:** Data → Research submenu; thin client (start/pause/clarify + event stream).
 
 ### `atlas-brain` — Brain Core (Rust)
 - **Wat:** Request-driven HTTP-daemon. Geen background loops.
@@ -90,10 +91,29 @@ Wereldklasse stores-architectuur: **28 logische stores**, engines gefaseerd (SQL
 - **Status:** `GET /v1/atlas/engines`
 
 ### `agent-os` — Aansturing (M3)
-- **Tools:** versioned schemas + policy `allow|deny|ask` + capabilities; builtins seeded
-- **Tasks:** queue/running/blocked/completed + checkpoints (snapshot JSON)
+- **Tools:** versioned schemas + policy `allow|deny|ask` + capabilities; builtins seeded (`memory.*`, `documents.ingest`, `web.search`, `web.fetch`, `research.run`)
+- **Tasks:** queue/running/blocked/completed + checkpoints (snapshot JSON); research parent + child subagents via `parent_id`
 - **Prompts:** versioned `system_prompt`; snapshot on settings PUT
 - **Models:** registry synced from settings model_id
+
+### `research-plane` — Multi-agent research (one-brain)
+Request-driven research orchestrator in Atlas Brain — geen aparte daemon, geen background loops.
+
+**Flow:** intake (1–3 clarifiers) → lead plan → parallel subagents (ticks) → lead review / gaps → synthese → citation verify → rapport + Memory Cortex write + artifact.
+
+**API:**
+- `POST/GET /v1/atlas/research/jobs`
+- `GET /v1/atlas/research/jobs/{id}`
+- `POST …/tick` (1–32 steps, request-scoped)
+- `POST …/pause` · `POST …/clarify`
+
+**Stores:** `research_jobs` · `research_events` · `research_sources` · `research_scratchpad` · `research_claims`
+
+**Tools:** `web.search` / `web.fetch` — provider `stub` (offline corpus) of `http` (`research_search_url`). SEO-tier bronnen worden genegeerd.
+
+**Budgets (config):** `research_max_subagents` · `research_max_rounds` · `research_max_sources` · `research_max_ticks`
+
+**Integratie:** Agent-OS tasks, objects (content hash), artifacts, Memory Cortex (semantic learn), outbox events `research.created` / `research.completed`.
 
 ### `improvement-loop` — Controle (M4)
 - **Evals:** cases + request-driven runner (`POST /v1/atlas/evals/run`) → scores + traces
@@ -118,7 +138,8 @@ Frames: SYSTEM_PROMPT → self → router? → semantic → procedural → episo
 | Naam | Intentie |
 |------|----------|
 | `trading-engine` / workspaces / crawlers | Plugins op dezelfde brain |
-| `data-workspace` / `coding-workspace` UI | Product shells (code-index API al live) |
+| `data-workspace` / `coding-workspace` UI | Product shells (Research live onder Data; code-index API al live) |
+| `pdf.read` / `code.sandbox` research tools | Fase 2 research tools |
 | `ethics-layer` / `security-layer` | Laatst |
 | `graph-scale` (AGE/Neo4j) | Alleen bij meetbare edge-volume |
 | `cnn-memory` / `rnn-episode` | Experimenteel |

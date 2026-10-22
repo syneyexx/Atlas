@@ -135,6 +135,52 @@ impl Store {
                 "ask",
                 vec!["documents.write", "objects.write"],
             ),
+            (
+                "web.search",
+                "1",
+                "Zoek het web (stub corpus of HTTP search provider)",
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "limit": {"type": "integer"}
+                    },
+                    "required": ["query"]
+                }),
+                "allow",
+                vec!["research.search"],
+            ),
+            (
+                "web.fetch",
+                "1",
+                "Haal een pagina op en normaliseer naar leesbare tekst",
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string"}
+                    },
+                    "required": ["url"]
+                }),
+                "allow",
+                vec!["research.fetch"],
+            ),
+            (
+                "research.run",
+                "1",
+                "Start of tick een research-job in Atlas Brain",
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "question": {"type": "string"},
+                        "mode": {"type": "string"},
+                        "job_id": {"type": "string"},
+                        "action": {"type": "string", "enum": ["create","tick","pause","clarify"]}
+                    },
+                    "required": ["action"]
+                }),
+                "allow",
+                vec!["research.write"],
+            ),
         ];
         let mut n = 0usize;
         for (name, ver, desc, schema, policy, caps) in builtins {

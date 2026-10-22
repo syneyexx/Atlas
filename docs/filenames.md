@@ -6,7 +6,8 @@
 
 | Bestand / map | Architectuur | Rol |
 |---------------|--------------|-----|
-| `Atlas_999_React.zip` | frontend (bronarchief) | Originele UI-zip |
+| `Atlas_999_React.zip` | frontend (bronarchief) | Originele chat UI-zip |
+| `Research_Update.zip` | frontend (bronarchief) | Research UI-zip (Data → Research) |
 | `README.md` | meta | Intro |
 | `docs/datanames.md` | docs | Architectuurkaart |
 | `docs/filenames.md` | docs | Deze index |
@@ -21,14 +22,18 @@
 | Bestand | Architectuur | Rol |
 |---------|--------------|-----|
 | `frontend/src/main.tsx` | frontend | Entry |
-| `frontend/src/components/AtlasWorkspace.tsx` | frontend | Shell / settings / composer |
+| `frontend/src/components/AtlasWorkspace.tsx` | frontend | Shell / settings / composer / Research mount |
+| `frontend/src/components/ResearchWorkspace.tsx` | frontend / research-plane | Research UI (command, phases, terminal) |
 | `frontend/src/components/ChatThread.tsx` | frontend | Bubbels |
 | `frontend/src/components/AtlasMark.tsx` | frontend | Merk |
 | `frontend/src/lib/runtime.ts` | frontend ↔ brain | Completions adapter |
 | `frontend/src/lib/brain.ts` | frontend ↔ control-plane | Settings / knowledge client |
+| `frontend/src/lib/research.ts` | frontend ↔ research-plane | Types + research API client |
+| `frontend/src/lib/id.ts` | frontend | UUID helper (HTTP-preview safe) |
 | `frontend/src/lib/conversations.ts` | frontend | Voorbeeld + guards |
 | `frontend/public/assets/atlas.css` | frontend | Basis |
 | `frontend/public/assets/chat.css` | frontend | Chat + settings |
+| `frontend/public/assets/research.css` | frontend | Research layout / terminal |
 
 ## Backend — core / API
 
@@ -49,8 +54,13 @@
 | `backend/atlas-brain/src/api/agent_api.rs` | agent-os | tools / tasks / prompts / model registry |
 | `backend/atlas-brain/src/api/eval_api.rs` | improvement-loop | evals / feedback / training / cache |
 | `backend/atlas-brain/src/api/platform_api.rs` | scale-adapters | engines / projects / artifacts / costs / secrets / code |
+| `backend/atlas-brain/src/api/research_api.rs` | research-plane | jobs / tick / pause / clarify |
 | `backend/atlas-brain/src/lm/client.rs` | local-lm-client | LM HTTP/stub |
 | `backend/atlas-brain/src/brain/pipeline.rs` | neural-pipeline | Cortex → LM + durable trace |
+| `backend/atlas-brain/src/brain/research/mod.rs` | research-plane | Research module root |
+| `backend/atlas-brain/src/brain/research/orchestrator.rs` | research-plane | Intake→plan→subagents→synth→verify |
+| `backend/atlas-brain/src/brain/research/tools.rs` | research-plane | web.search / web.fetch (stub|http) |
+| `backend/atlas-brain/src/store/research.rs` | research-plane | jobs / events / sources / scratchpad / claims |
 | `backend/atlas-brain/rust-toolchain.toml` | atlas-brain | Pin stable rustc |
 
 ## Backend — Memory Cortex
@@ -91,6 +101,6 @@
 
 | Pad | Rol |
 |-----|-----|
-| `…/data/brain-config.json` | Settings |
-| `…/data/atlas.db` | conversations, messages, knowledge, memory_*, documents, traces, outbox |
-| `…/data/objects/` | Content-addressed blobs (sha256) |
+| `…/data/brain-config.json` | Settings (incl. research_* budgets) |
+| `…/data/atlas.db` | conversations, messages, knowledge, memory_*, documents, traces, outbox, research_* |
+| `…/data/objects/` | Content-addressed blobs (sha256) — ook research source fragments / reports |
