@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 /// Runtime settings — nothing about prompts or models is hardcoded in code paths.
 /// Empty strings mean “not configured yet”; the operator fills them via settings / config file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct BrainConfig {
     pub bind: String,
     /// Fully editable system prompt. Never injected from source defaults as policy text.
@@ -18,8 +19,22 @@ pub struct BrainConfig {
     pub cors_origins: Vec<String>,
     /// How many knowledge hits to inject into context (0 disables recall injection).
     pub knowledge_top_k: usize,
-    /// Max characters of recalled knowledge block.
+    /// Max characters of recalled knowledge block (legacy; token budget preferred).
     pub knowledge_max_chars: usize,
+
+    // --- Memory Cortex ---
+    /// `local_http` | `stub` | `local_hash`
+    pub embed_provider: String,
+    pub embed_base_url: String,
+    pub embed_model: String,
+    pub memory_token_budget: usize,
+    pub memory_chunk_chars: usize,
+    pub memory_dedupe_threshold: f64,
+    pub memory_decay_lambda: f64,
+    pub memory_min_salience: f64,
+    pub memory_min_hit_score: f64,
+    pub memory_hops: usize,
+    pub memory_include_router_brief: bool,
 }
 
 impl Default for BrainConfig {
@@ -39,6 +54,17 @@ impl Default for BrainConfig {
             ],
             knowledge_top_k: 6,
             knowledge_max_chars: 6000,
+            embed_provider: "stub".into(),
+            embed_base_url: "http://127.0.0.1:11434/v1".into(),
+            embed_model: String::new(),
+            memory_token_budget: 1800,
+            memory_chunk_chars: 1800,
+            memory_dedupe_threshold: 0.92,
+            memory_decay_lambda: 0.002,
+            memory_min_salience: 0.02,
+            memory_min_hit_score: 0.04,
+            memory_hops: 2,
+            memory_include_router_brief: false,
         }
     }
 }
@@ -52,6 +78,11 @@ pub struct PublicSettings {
     pub lm_provider: String,
     pub knowledge_top_k: usize,
     pub knowledge_max_chars: usize,
+    pub embed_provider: String,
+    pub embed_base_url: String,
+    pub embed_model: String,
+    pub memory_token_budget: usize,
+    pub memory_hops: usize,
 }
 
 impl From<&BrainConfig> for PublicSettings {
@@ -63,6 +94,11 @@ impl From<&BrainConfig> for PublicSettings {
             lm_provider: c.lm_provider.clone(),
             knowledge_top_k: c.knowledge_top_k,
             knowledge_max_chars: c.knowledge_max_chars,
+            embed_provider: c.embed_provider.clone(),
+            embed_base_url: c.embed_base_url.clone(),
+            embed_model: c.embed_model.clone(),
+            memory_token_budget: c.memory_token_budget,
+            memory_hops: c.memory_hops,
         }
     }
 }
@@ -75,6 +111,11 @@ pub struct PublicSettingsPatch {
     pub lm_provider: Option<String>,
     pub knowledge_top_k: Option<usize>,
     pub knowledge_max_chars: Option<usize>,
+    pub embed_provider: Option<String>,
+    pub embed_base_url: Option<String>,
+    pub embed_model: Option<String>,
+    pub memory_token_budget: Option<usize>,
+    pub memory_hops: Option<usize>,
 }
 
 impl BrainConfig {
@@ -133,6 +174,31 @@ impl BrainConfig {
         }
         if let Some(v) = patch.knowledge_max_chars {
             self.knowledge_max_chars = v.max(256);
+        }
+        if let Some(v) = patch.embed_provider {
+            if !matches!(v.as_str(), "local_http" | "stub" | "local_hash") {
+                return Err(AtlasError::BadRequest(
+                    "embed_provider must be local_http, stub, or local_hash.".into(),
+                ));
+            }
+            self.embed_provider = v;
+        }
+        if let Some(v) = patch.embed_base_url {
+            if !(v.starts_with("http://") || v.starts_with("https://")) {
+                return Err(AtlasError::BadRequest(
+                    "embed_base_url must be an HTTP(S) URL.".into(),
+                ));
+            }
+            self.embed_base_url = v;
+        }
+        if let Some(v) = patch.embed_model {
+            self.embed_model = v;
+        }
+        if let Some(v) = patch.memory_token_budget {
+            self.memory_token_budget = v.max(256);
+        }
+        if let Some(v) = patch.memory_hops {
+            self.memory_hops = v.clamp(1, 4);
         }
         self.save()
     }

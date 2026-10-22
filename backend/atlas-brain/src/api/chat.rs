@@ -53,14 +53,25 @@ pub async fn chat_completions(
         })
         .collect();
 
-    let answer = run_completion(&cfg, &state.store, &state.lm, &conversation).await?;
+    let conversation_id = body
+        .conversation_id
+        .clone()
+        .filter(|s| !s.is_empty());
+    let answer = run_completion(
+        &cfg,
+        &state.store,
+        &state.lm,
+        &state.embed,
+        &conversation,
+        conversation_id.as_deref(),
+    )
+    .await?;
     let created = Utc::now().timestamp();
     let persist = body.persist.unwrap_or(true);
 
     if persist {
-        let id = body
-            .conversation_id
-            .filter(|s| !s.is_empty())
+        let id = conversation_id
+            .clone()
             .unwrap_or_else(|| Uuid::new_v4().to_string());
         let title = body
             .conversation_title

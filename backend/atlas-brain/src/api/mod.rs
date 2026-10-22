@@ -2,6 +2,7 @@ mod chat;
 mod config_api;
 mod conversations;
 mod knowledge;
+mod memory_api;
 mod models;
 
 use crate::state::AppState;
@@ -30,4 +31,9 @@ pub fn router() -> Router<AppState> {
         )
         .route("/v1/atlas/knowledge/recall", post(knowledge::recall))
         .route("/v1/atlas/knowledge/{id}", delete(knowledge::delete))
+        .route("/v1/atlas/memory", get(memory_api::list).post(memory_api::learn))
+        .route("/v1/atlas/memory/recall", post(memory_api::recall))
+        .route("/v1/atlas/memory/migrate", post(memory_api::migrate))
+        .route("/v1/atlas/memory/profile", get(memory_api::list_profile).post(memory_api::upsert_profile))
+        .route("/v1/atlas/memory/{id}", delete(memory_api::forget))
 }
