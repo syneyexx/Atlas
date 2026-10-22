@@ -4,9 +4,13 @@ import { createId } from '../lib/id';
 import { useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
+  Database,
+  Download,
   FileText,
   Folder,
   Grid2X2,
+  HardDrive,
+  Layers,
   Menu,
   MessageSquare,
   Paperclip,
@@ -26,6 +30,7 @@ import {
   type BrainSettings,
 } from '../lib/brain';
 import { ResearchWorkspace } from './ResearchWorkspace';
+import { DatasetsWorkspace, type DatasetFilter } from './datasets/DatasetsWorkspace';
 import { exampleResearch, type ResearchTask } from '../lib/research';
 import { ChatThread } from './ChatThread';
 import { defaultConversations, isConversation, type Conversation } from '../lib/conversations';
@@ -69,6 +74,10 @@ function ModelLoader({
 }
 
 export function AtlasWorkspace() {
+  const [datasetsVisited, setDatasetsVisited] = useState(false);
+  const [datasetFilter, setDatasetFilter] = useState<DatasetFilter>('Alle datasets');
+  const [datasetRequest, setDatasetRequest] = useState(0);
+  const [datasetDownloads, setDatasetDownloads] = useState(0);
   const [researchTasks, setResearchTasks] = useState<ResearchTask[]>([exampleResearch]);
   const [researchId, setResearchId] = useState(exampleResearch.id);
   const [researchRequest, setResearchRequest] = useState(0);
@@ -98,11 +107,18 @@ export function AtlasWorkspace() {
   const active = conversations.find((c) => c.id === activeId) || conversations[0];
 
   useEffect(() => {
-    if (window.location.hash === '#research') {
+    if (window.location.hash === '#datasets') {
+      setSection('Data');
+      setSubpage('Datasets');
+    } else if (window.location.hash === '#research') {
       setSection('Data');
       setSubpage('Research');
     }
   }, []);
+
+  useEffect(() => {
+    if (section === 'Data' && subpage === 'Datasets') setDatasetsVisited(true);
+  }, [section, subpage]);
 
   useEffect(() => {
     try {
@@ -194,6 +210,14 @@ export function AtlasWorkspace() {
     setSection('Data');
     setSubpage('Research');
     setResearchRequest((value) => value + 1);
+    setSidebarOpen(false);
+  }
+
+  function newDatasetImport() {
+    setSection('Data');
+    setSubpage('Datasets');
+    setDatasetFilter('Alle datasets');
+    setDatasetRequest((value) => value + 1);
     setSidebarOpen(false);
   }
 
@@ -414,27 +438,69 @@ export function AtlasWorkspace() {
 
   const homeVisible = section === 'Chat' && subpage === 'Chat' && !active.messages.length;
   const researchMode = section === 'Data' && subpage === 'Research';
+  const datasetsMode = section === 'Data' && subpage === 'Datasets';
 
   return (
     <main
-      className={`atlas-shell chat-layout ${researchMode ? 'research-layout' : ''} ${sidebarOpen ? 'sidebar-open' : ''}`}
+      className={`atlas-shell chat-layout ${section === 'Data' ? 'research-layout' : ''} ${datasetsMode ? 'datasets-layout' : ''} ${sidebarOpen ? 'sidebar-open' : ''}`}
     >
       <div className="atlas-art" aria-hidden="true" />
-      <aside className="sidebar" aria-label={researchMode ? 'Onderzoeken' : 'Gesprekken'}>
+      <aside
+        className="sidebar"
+        aria-label={datasetsMode ? 'Datasetbibliotheek' : researchMode ? 'Onderzoeken' : 'Gesprekken'}
+      >
         <a href="/" className="brand" aria-label="Atlas 999">
           ATLAS <sup>999</sup>
         </a>
         <button
           className="new-chat"
-          onClick={researchMode ? newResearch : newChat}
+          onClick={datasetsMode ? newDatasetImport : researchMode ? newResearch : newChat}
           disabled={busy}
         >
           <Plus />
-          <span>{researchMode ? 'Nieuw onderzoek' : 'Nieuw gesprek'}</span>
+          <span>
+            {datasetsMode ? 'Dataset importeren' : researchMode ? 'Nieuw onderzoek' : 'Nieuw gesprek'}
+          </span>
         </button>
-        <div className="conversation-heading">{researchMode ? 'ONDERZOEKEN' : 'GESPREKKEN'}</div>
+        <div className="conversation-heading">
+          {datasetsMode ? 'BIBLIOTHEEK' : researchMode ? 'ONDERZOEKEN' : 'GESPREKKEN'}
+        </div>
         <nav className="conversation-list">
-          {researchMode ? (
+          {datasetsMode ? (
+            <>
+              {(['Alle datasets', 'Downloads', 'Collecties', 'Opslag'] as DatasetFilter[]).map(
+                (label, i) => {
+                  const Icon = [Database, Download, Layers, HardDrive][i];
+                  return (
+                    <button
+                      key={label}
+                      className={`conversation ${datasetFilter === label ? 'selected' : ''}`}
+                      onClick={() => setDatasetFilter(label)}
+                    >
+                      <Icon />
+                      <span>
+                        {label}
+                        {label === 'Downloads' ? ` (${datasetDownloads})` : ''}
+                      </span>
+                    </button>
+                  );
+                },
+              )}
+              <div className="conversation-heading">COLLECTIES</div>
+              {(['Research', 'Code & instructies', 'Eigen datasets'] as DatasetFilter[]).map(
+                (label) => (
+                  <button
+                    key={label}
+                    className={`conversation ${datasetFilter === label ? 'selected' : ''}`}
+                    onClick={() => setDatasetFilter(label)}
+                  >
+                    <Folder />
+                    <span>{label}</span>
+                  </button>
+                ),
+              )}
+            </>
+          ) : researchMode ? (
             <>
               {researchTasks.map((task) => (
                 <button
@@ -527,6 +593,18 @@ export function AtlasWorkspace() {
           </div>
         </header>
         <section className="workspace" aria-label={section}>
+          <div className="datasets-mount" hidden={!datasetsMode}>
+            {datasetsVisited && (
+              <DatasetsWorkspace
+                filter={datasetFilter}
+                onFilterChange={setDatasetFilter}
+                importRequest={datasetRequest}
+                onDownloadCount={setDatasetDownloads}
+                baseUrl={config.baseUrl}
+                connected={connected}
+              />
+            )}
+          </div>
           <div className="research-mount" hidden={!researchMode}>
             <ResearchWorkspace
               selectedId={researchId}
@@ -702,14 +780,24 @@ export function AtlasWorkspace() {
             <span>Dashboard</span>
           </button>
           {section === 'Data' ? (
-            <button
-              className={subpage === 'Research' ? 'active chat-tab' : 'chat-tab'}
-              aria-current={subpage === 'Research' ? 'page' : undefined}
-              onClick={() => setSubpage('Research')}
-            >
-              <FileText />
-              <span>Research</span>
-            </button>
+            <>
+              <button
+                className={subpage === 'Research' ? 'active chat-tab' : 'chat-tab'}
+                aria-current={subpage === 'Research' ? 'page' : undefined}
+                onClick={() => setSubpage('Research')}
+              >
+                <FileText />
+                <span>Research</span>
+              </button>
+              <button
+                className={subpage === 'Datasets' ? 'active chat-tab' : 'chat-tab'}
+                aria-current={subpage === 'Datasets' ? 'page' : undefined}
+                onClick={() => setSubpage('Datasets')}
+              >
+                <Database />
+                <span>Datasets</span>
+              </button>
+            </>
           ) : (
             <button
               className={subpage === 'Chat' ? 'active chat-tab' : 'chat-tab'}

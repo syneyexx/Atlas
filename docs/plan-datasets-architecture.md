@@ -476,7 +476,7 @@ Claude tekende het juiste **product**; hij tekende de verkeerde **runtime**. Ray
 | D5 | Enrichment ladder + cache + cost ledger | **DONE** |
 | D6 | `dataset_edges` + FTS search + neighbors/subgraph + tool seeds | **DONE** |
 | D7 | Mix compiler + datamap artifact + contaminated block | **DONE** |
-| D8 | UI page | PLAN (wacht op frontend-upload) |
+| D8 | UI page (Dataset-update.zip → Data → Datasets, Brain-wired) | **DONE** |
 | D9 | Scale adapters (Ray/Qdrant/Neo4j/lakeFS) | PLAN (optioneel) |
 
 **Shipped API:** `/v1/atlas/datasets/*` (catalog, pin/acquire, sample/recipes/approve, jobs/tick/pause, records/facets/datamap, edges/neighbors/subgraph, mixes/compile, eval-guards).

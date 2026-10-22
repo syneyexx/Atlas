@@ -130,13 +130,13 @@ Request-driven research orchestrator in Atlas Brain — geen aparte daemon, geen
 Cursor-klasse data-OS op één brain: Hub/local acquisitie → schema-agent/recipe → request-driven verwerkings-DAG → verrijking (kostenladder) → relatiegraaf → mix-export.
 
 - **Plan:** `docs/plan-datasets-architecture.md` (D0–D9)
-- **Status:** **D0–D7 DONE** in `atlas-brain`; D8 UI wacht op frontend-upload; D9 scale optioneel
+- **Status:** **D0–D8 DONE** — Brain API + Data → Datasets UI (uit `Dataset-update.zip`, wired naar `/v1/atlas/datasets*`); D9 scale optioneel
 - **API:** `/v1/atlas/datasets/catalog/*` · `POST/GET /datasets` · `…/acquire` · `…/sample` · recipes/verify/approve · jobs/tick/pause · records/facets/datamap · edges/neighbors/subgraph · mixes/compile · eval-guards
 - **Invariants:** Research-achtige ticks (geen ETL-daemon); JSONL streaming in-process; SQLite + `data/datasets/`; geen Dagster/Ray/Neo4j defaults
 - **Stores:** `dataset_catalog_cache` · `datasets` · `dataset_shards` · `dataset_recipes` · `dataset_jobs` · `dataset_events` · `dataset_records` (+ FTS) · `dataset_edges` · `enrichment_cache` · `eval_guards` · `dataset_mixes`
 - **Tools (seeded):** `datasets.search` · `acquire` · `run` · `get_record` · `neighbors` · `subgraph` · `compile_mix`
 - **Human gate:** verplicht na steekproef (`await_approval`), vóór full run
-- **UI:** graphics later; contracts live
+- **UI:** `DatasetsWorkspace` onder Data → Datasets (`/#datasets`); console toont alleen Brain-events
 - **Productpositie:** onder Data naast Research (Research = web→rapport; Datasets = corpus→mix)
 
 ### `knowledge-store` — Compat
@@ -153,7 +153,7 @@ Frames: SYSTEM_PROMPT → self → router? → semantic → procedural → episo
 | Naam | Intentie |
 |------|----------|
 | `trading-engine` / workspaces / crawlers | Plugins op dezelfde brain |
-| `data-workspace` UI | Product shell: Research live; Datasets API live (D0–D7); **UI D8** volgt upload |
+| `data-workspace` UI | Research + Datasets live onder Data |
 | `coding-workspace` UI | Product shell (code-index API al live) |
 | `pdf.read` / `code.sandbox` research tools | Fase 2 research tools |
 | `ethics-layer` / `security-layer` | Laatst |
