@@ -1,9 +1,10 @@
 use crate::error::{AtlasError, AtlasResult};
 use crate::memory::{
-    recall_into_context, LearnMemoryRequest, MemoryKind, MemoryNode, MemoryScope, MemorySource,
-    ProfileUpsertRequest, Provenance, RecallMemoryRequest, RecallMemoryResponse, WriteAction,
-    WriteDecision, WriteGovernor,
+    consolidate_episodic, recall_into_context, ConsolidateRequest, LearnMemoryRequest, MemoryKind,
+    MemoryNode, MemoryScope, MemorySource, ProfileUpsertRequest, Provenance, RecallMemoryRequest,
+    RecallMemoryResponse, WorkingMemoryState, WriteAction, WriteDecision, WriteGovernor,
 };
+use crate::memory::working::load_working;
 use crate::state::AppState;
 use axum::extract::{Path, State};
 use axum::Json;
@@ -150,7 +151,31 @@ pub async fn upsert_profile(
         .await?;
     state.store.upsert_memory_node(&node)?;
     state.store.upsert_embedding(&node.id, &vector)?;
-    // Keep node.salience stable reference for response
     let _ = &mut node;
     Ok(Json(node))
+}
+
+pub async fn consolidate(
+    State(state): State<AppState>,
+    Json(body): Json<ConsolidateRequest>,
+) -> AtlasResult<Json<crate::memory::ConsolidateResult>> {
+    let cfg = state.config.read().await.clone();
+    if cfg.model_id.trim().is_empty() && cfg.lm_provider != "stub" {
+        return Err(AtlasError::BadRequest(
+            "model_id verplicht voor consolidatie met local_http.".into(),
+        ));
+    }
+    let result =
+        consolidate_episodic(&state.store, &cfg, &state.lm, &state.embed, body).await?;
+    Ok(Json(result))
+}
+
+pub async fn get_working(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> AtlasResult<Json<WorkingMemoryState>> {
+    let cfg = state.config.read().await.clone();
+    load_working(&state.store, &cfg, &id)?
+        .map(Json)
+        .ok_or_else(|| AtlasError::NotFound(format!("Working memory voor {id} niet gevonden")))
 }

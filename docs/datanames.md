@@ -6,16 +6,16 @@
 
 Alles denkt via **Atlas Brain** (`backend/atlas-brain`). De React-UI is alleen het gezicht. Trading/Data/Coding/crawlers zijn later plugins op dezelfde brain — niet aparte daemons die elkaar pollen.
 
-**Verboden:** periodieke health checks, periodieke API/model-pings, hardcoded SYSTEM_PROMPT, ethiek-/security-lagen (komen later), background embed/consolidate sweepers.
+**Verboden:** periodieke health checks, periodieke API/model-pings, hardcoded SYSTEM_PROMPT, ethiek-/security-lagen (komen later), background embed/consolidate/TTL sweepers.
 
 ---
 
 ## Architecturen
 
 ### `frontend` — Obsidian Chat UI
-- **Wat:** Pixel-exact React + Vite shell uit `Atlas_999_React.zip` (Chat, navigatie, composer).
+- **Wat:** Pixel-exact React + Vite shell uit `Atlas_999_React.zip`.
 - **Waar:** `frontend/`
-- **Contract:** Brain via `/v1/models` + `/v1/chat/completions`, plus `/v1/atlas/*`.
+- **Contract:** `/v1/models`, `/v1/chat/completions`, `/v1/atlas/*`.
 - **State:** `localStorage` cache; bron van waarheid = Brain SQLite + Memory Cortex.
 
 ### `atlas-brain` — Brain Core (Rust)
@@ -25,86 +25,76 @@ Alles denkt via **Atlas Brain** (`backend/atlas-brain`). De React-UI is alleen h
 - **Data:** `ATLAS_DATA_DIR` of `./data` → `brain-config.json` + `atlas.db`.
 
 ### `local-lm-client` — Lokale LM-adapter
-- **Wat:** HTTP-client naar lokale OpenAI-compat LM (Ollama / llama.cpp / LM Studio). Geen cloud-OpenAI.
 - **Providers:** `local_http` | `stub`
-- **Wanneer:** alleen bij `/v1/models` of `/v1/chat/completions`.
+- **Wanneer:** alleen bij `/v1/models`, `/v1/chat/completions`, of on-demand consolidate.
 
 ### `config-plane` — Runtime settings
 - **API:** `GET/PUT /v1/atlas/settings`
-- **Velden o.a.:** SYSTEM_PROMPT, model_id, lm_*, embed_*, knowledge_top_k, memory_token_budget, memory_hops
+- **Velden o.a.:** SYSTEM_PROMPT, model/lm/embed, knowledge_top_k, memory_token_budget, memory_hops, working_ttl_secs, memory_auto_consolidate, consolidate_prompt
 - **Persist:** `data/brain-config.json`
-- **Regel:** geen policy-tekst hardcoded in codepaden.
 
 ### `conversation-memory`
-- **API:** `GET/POST /v1/atlas/conversations`, `GET/DELETE /v1/atlas/conversations/{id}`
+- **API:** `/v1/atlas/conversations*`
 - **Store:** SQLite `conversations`
-- **Chat:** completions kunnen `conversation_id` / `title` / `persist` meekrijgen.
 
-### `memory-cortex` — Memory v2 (expert stack)
-One-brain residual memory naast het LM (LM blijft de transformer + LM-head).
+### `memory-cortex` — Memory v2 (M0–M5)
+One-brain residual memory naast het LM.
 
-**Request-pipeline (per completion / recall):**
-1. Write Governor (bij learn) — classify → chunk → dedupe/conflict → commit  
-2. Router (query → expert mix)  
-3. Multi-head attention — `semantic` | `episodic` | `self_profile` | `lexical` | `recency`  
-4. Fuse logits → gate  
-5. Optional hop 2 (query expand)  
-6. Residual ContextStream + **token-budget**  
+**Request-pipeline:**
+1. Write Governor (learn / chat episodic)  
+2. MoE router (normalized expert mix + working continuity)  
+3. Multi-head attention — semantic · episodic · self_profile · lexical · recency · **working**  
+4. Fuse → gate (expert_top_k schaalt head capacity)  
+5. Optional hop 2  
+6. Residual ContextStream + token-budget  
 7. Local LM completion  
-8. Salience write-back (on-request)
+8. Salience bump (used) / soften (near-miss)  
+9. Working KV save (TTL refresh on read/write)  
+10. Optional auto-consolidate (settings)
 
-**Experts / kinds:** `working` · `episodic` · `semantic` · `self_profile` · (`procedural` later)
+**Experts:** working · episodic · semantic · self_profile · (procedural later)
 
-**Embedding:** `embed_provider` = `stub`/`local_hash` (deterministisch) of `local_http` (`POST …/embeddings`)
+**Working KV (M3):** per `conversation_id` — pins, recent hits, last router/query, embedding blob; expiry **on-read** only.  
+API: `GET /v1/atlas/memory/working/{conversation_id}`
 
-**Decay/forget:** on-read salience decay + `DELETE /v1/atlas/memory/{id}` (archive/delete). Geen sweeper-loop.
+**MoE / salience (M4):** `memory/moe.rs` normalize + continuity; write-back bump/soften.
 
-**Provenance per node:** source, created_at, parent_ids, confidence, scope, conversation_id
+**Consolidate (M5):** episode→semantic distill on-demand.  
+API: `POST /v1/atlas/memory/consolidate`  
+Stub-LM: deterministische distill uit brontekst.  
+`consolidate_prompt` is settings (technisch), niet SYSTEM_PROMPT-ethiek.
 
-**API:**
-- `GET/POST /v1/atlas/memory` — list / learn (Write Governor)
-- `POST /v1/atlas/memory/recall` — fused hits; `trace:true` voor forensics
-- `POST /v1/atlas/memory/migrate` — legacy knowledge → memory_nodes (+ embed on-demand)
-- `GET/POST /v1/atlas/memory/profile` — self/profile
-- `DELETE /v1/atlas/memory/{id}` — forget
+**Overige API:**
+- `GET/POST /v1/atlas/memory` · `POST …/recall` (`trace`) · `POST …/migrate`
+- `GET/POST …/profile` · `DELETE …/{id}` forget
 
-**Store:** SQLite `memory_nodes` + `memory_embeddings`
+**Store:** `memory_nodes` · `memory_embeddings` · `working_memory`
 
-### `knowledge-store` — Compat-laag
-- **API:** `/v1/atlas/knowledge*` blijft werken.
-- **Learn/recall** routeren via Write Governor / Memory Cortex.
-- Semantic writes spiegelen ook legacy `knowledge`-tabel.
+### `knowledge-store` — Compat
+`/v1/atlas/knowledge*` → Write Governor / Cortex.
 
-### `neural-pipeline` — Context assembly
-- **Code:** `brain/pipeline.rs` + `memory/cortex.rs` + `memory/residual.rs`
-- **Volgorde residual frames:** SYSTEM_PROMPT → self/profile → (router) → semantic → episodic → working → conversation  
-- Token-budget snijdt lage prioriteit (schatting chars/4).
+### `neural-pipeline`
+`brain/pipeline.rs` + `memory/cortex.rs` + `residual.rs`  
+Frames: SYSTEM_PROMPT → self → router? → semantic → episodic → working → conversation
 
 ---
 
-## Gereserveerd (nog niet / later)
+## Gereserveerd (later)
 
 | Naam | Intentie |
 |------|----------|
-| `memory-moe-hard` | M4: zwaardere MoE + salience tuning |
-| `memory-consolidate` | M5: episode→semantic distill via LM |
-| `trading-engine` | Plugin op brain |
-| `data-workspace` / `coding-workspace` | Later |
-| `crawler-orchestrator` | On-demand via brain |
+| `trading-engine` / workspaces / crawlers | Plugins |
 | `ethics-layer` / `security-layer` | Laatst |
 | `cnn-memory` / `rnn-episode` | Later |
+| `procedural` expert | Later |
 
 ---
 
-## Omgeving / start
+## Start
 
 ```bash
-cd backend/atlas-brain
-ATLAS_DATA_DIR=./data cargo run --release
-
-cd frontend
-npm install && npm run dev
+cd backend/atlas-brain && ATLAS_DATA_DIR=./data cargo run --release
+cd frontend && npm install && npm run dev
 ```
 
-Settings → Brain `http://127.0.0.1:8080/v1`, model-ID, lokale LM-URL, SYSTEM_PROMPT → **Verbinden**.  
-Voor offline pipeline-tests: `lm_provider=stub`, `embed_provider=stub`.
+Offline: `lm_provider=stub`, `embed_provider=stub`.

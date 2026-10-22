@@ -2,6 +2,7 @@ use crate::config::BrainConfig;
 use crate::error::AtlasResult;
 use crate::memory::decay::{effective_salience, should_skip};
 use crate::memory::embed::{cosine, EmbedClient};
+use crate::memory::moe::expert_top_k;
 use crate::memory::types::{
     AttentionHeadResult, MemoryHit, MemoryKind, MemoryNode, RouterDecision,
 };
@@ -35,7 +36,7 @@ pub async fn multi_head_recall(
         conversation_id,
         now,
         |n| n.kind == MemoryKind::Semantic,
-        top_k,
+        expert_top_k(top_k, router.semantic),
     )?);
     heads.push(run_head(
         "episodic",
@@ -48,7 +49,7 @@ pub async fn multi_head_recall(
         conversation_id,
         now,
         |n| n.kind == MemoryKind::Episodic,
-        top_k,
+        expert_top_k(top_k, router.episodic),
     )?);
     heads.push(run_head(
         "self_profile",
@@ -61,11 +62,11 @@ pub async fn multi_head_recall(
         conversation_id,
         now,
         |n| n.kind == MemoryKind::SelfProfile,
-        top_k.max(4),
+        expert_top_k(top_k.max(4), router.self_profile),
     )?);
     heads.push(run_head(
         "lexical",
-        0.35,
+        0.2 + 0.3 * router.semantic,
         &nodes,
         store,
         cfg,
@@ -74,11 +75,11 @@ pub async fn multi_head_recall(
         conversation_id,
         now,
         |_| true,
-        top_k,
+        expert_top_k(top_k, 0.35),
     )?);
     heads.push(run_head(
         "recency",
-        router.working.max(0.2),
+        router.working.max(router.episodic * 0.5),
         &nodes,
         store,
         cfg,
@@ -87,7 +88,7 @@ pub async fn multi_head_recall(
         conversation_id,
         now,
         |n| n.kind == MemoryKind::Episodic || n.kind == MemoryKind::Working,
-        top_k,
+        expert_top_k(top_k, router.working.max(0.2)),
     )?);
     Ok(heads)
 }
@@ -272,19 +273,3 @@ pub fn fuse_hits(heads: &[AttentionHeadResult], top_k: usize) -> Vec<MemoryHit> 
     all
 }
 
-pub fn route_query(query: &str) -> RouterDecision {
-    let q = query.to_lowercase();
-    let mut r = RouterDecision::default();
-    if q.contains("ik ") || q.contains("jij ") || q.contains("wie ben") || q.contains("onthoud") {
-        r.self_profile = 0.7;
-    }
-    if q.contains("gisteren") || q.contains("eerder") || q.contains("vorige") || q.contains("gesprek")
-    {
-        r.episodic = 0.55;
-        r.working = 0.35;
-    }
-    if q.contains("wat is") || q.contains("definitie") || q.contains("uitleg") {
-        r.semantic = 0.65;
-    }
-    r
-}
