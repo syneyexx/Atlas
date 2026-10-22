@@ -119,10 +119,23 @@ Request-driven research orchestrator in Atlas Brain — geen aparte daemon, geen
 - **Evals:** cases + request-driven runner (`POST /v1/atlas/evals/run`) → scores + traces
 - **Feedback:** up/down/correction; corrections → training_examples
 - **Semantic cache:** opt-in (`semantic_cache_enabled`); invalidate on prompt/model change
+- **Datasets-koppeling (gepland):** training_examples = label/feedback-sink; trainingsmix-export komt uit Datasets mix compiler — zie `docs/plan-datasets-architecture.md`
 
 ### `document-rag` — Document plane (M2)
 - Ingest: object hash (sha256) → chunks → semantic memory nodes + `has_chunk` edges
 - Search: FTS5 op chunks; recall via Memory Cortex (semantic heads)
+- **Niet verwarren met Datasets:** documents = RAG-ingest van tekst/files; datasets = Hub/Parquet acquisitie → recipe → trainingscorpus
+
+### `datasets-plane` — Data → Datasets (PLAN)
+Cursor-klasse data-OS op één brain: Hub/local acquisitie → schema-agent/recipe → request-driven verwerkings-DAG → verrijking (kostenladder) → relatiegraaf → mix-export.
+
+- **Plan:** `docs/plan-datasets-architecture.md` (D0–D9)
+- **Status:** plan only — nog geen `/v1/atlas/datasets*` in code
+- **Invariants:** Research-achtige ticks (geen ETL-daemon); Polars/DuckDB/Arrow in-process; SQLite+Parquet first; geen Dagster/Ray/Neo4j defaults
+- **Stores (logisch 29–39):** catalog · revisions · shards · records · recipes · jobs · run artifacts · enrichment cache · dataset_edges · eval-guards · mixes
+- **Human gate:** verplicht na steekproef, vóór full run
+- **UI:** graphics later; contracts eerst
+- **Productpositie:** onder Data naast Research (Research = web→rapport; Datasets = corpus→mix)
 
 ### `knowledge-store` — Compat
 `/v1/atlas/knowledge*` → Write Governor / Cortex.
@@ -138,10 +151,12 @@ Frames: SYSTEM_PROMPT → self → router? → semantic → procedural → episo
 | Naam | Intentie |
 |------|----------|
 | `trading-engine` / workspaces / crawlers | Plugins op dezelfde brain |
-| `data-workspace` / `coding-workspace` UI | Product shells (Research live onder Data; code-index API al live) |
+| `data-workspace` UI | Product shell: Research live; **Datasets** volgt plan D0–D8 |
+| `coding-workspace` UI | Product shell (code-index API al live) |
 | `pdf.read` / `code.sandbox` research tools | Fase 2 research tools |
 | `ethics-layer` / `security-layer` | Laatst |
-| `graph-scale` (AGE/Neo4j) | Alleen bij meetbare edge-volume |
+| `graph-scale` (AGE/Neo4j) | Alleen bij meetbare edge-volume (ook datasets D9) |
+| `datasets-scale` (Ray / Qdrant / lakeFS) | Alleen D9 achter metingen |
 | `cnn-memory` / `rnn-episode` | Experimenteel |
 
 ---

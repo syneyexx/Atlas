@@ -12,7 +12,8 @@
 | `docs/datanames.md` | docs | Architectuurkaart |
 | `docs/filenames.md` | docs | Deze index |
 | `docs/plan-stores-architecture.md` | store-plane | Wereldklasse stores-plan (28 logical / gefaseerde engines) |
-| `docs/engines.md` | scale-adapters | M5 engine config (Postgres/Redis/S3) |
+| `docs/plan-datasets-architecture.md` | datasets-plane | Datasets plane plan (D0–D9; Hub→recipe→mix) |
+| `docs/engines.md` | scale-adapters | M5 engine config (Postgres/Redis/S3); datasets engine-notities |
 | `docker-compose.yml` | scale-adapters | Postgres + Redis + MinIO |
 | `frontend/` | frontend | React UI |
 | `backend/atlas-brain/` | atlas-brain | Brain + Memory Cortex |
@@ -104,3 +105,14 @@
 | `…/data/brain-config.json` | Settings (incl. research_* budgets) |
 | `…/data/atlas.db` | conversations, messages, knowledge, memory_*, documents, traces, outbox, research_* |
 | `…/data/objects/` | Content-addressed blobs (sha256) — ook research source fragments / reports |
+| `…/data/datasets/` | **Gepland (D1+):** Parquet shards / manifests per pinned dataset |
+
+## Gepland — datasets-plane (nog geen code)
+
+Zie `docs/plan-datasets-architecture.md`. Verwachte paden bij implementatie:
+
+| Bestand (intentie) | Architectuur | Rol |
+|--------------------|--------------|-----|
+| `backend/atlas-brain/src/api/datasets_api.rs` | datasets-plane | HTTP `/v1/atlas/datasets*` |
+| `backend/atlas-brain/src/brain/datasets/` | datasets-plane | Orchestrator, schema-agent, step registry, tick runner |
+| `backend/atlas-brain/src/store/datasets.rs` | datasets-plane | catalog/revisions/shards/recipes/jobs/edges/mixes |
