@@ -468,15 +468,19 @@ Claude tekende het juiste **product**; hij tekende de verkeerde **runtime**. Ray
 
 | MS | Inhoud | Status |
 |----|--------|--------|
-| D0 | Identity + stores + stub APIs | **PLAN** |
-| D1 | Acquire | PLAN |
-| D2 | Schema-agent + recipes + human gate | PLAN |
-| D3 | Engine core + ticks | PLAN |
-| D4 | MinHash + quality + decontaminate | PLAN |
-| D5 | Enrichment ladder | PLAN |
-| D6 | Graph light + serving/MCP | PLAN |
-| D7 | Mix + datakaart + golden evals | PLAN |
+| D0 | Identity + stores + stub APIs | **DONE** |
+| D1 | Acquire (stub fixtures, checksums, disk budget, gated→`hf_token`) | **DONE** |
+| D2 | Schema-agent + recipes + verify + human gate | **DONE** |
+| D3 | Engine core + job ticks (Research-patroon) | **DONE** |
+| D4 | MinHash + quality + decontaminate + eval-guards | **DONE** |
+| D5 | Enrichment ladder + cache + cost ledger | **DONE** |
+| D6 | `dataset_edges` + FTS search + neighbors/subgraph + tool seeds | **DONE** |
+| D7 | Mix compiler + datamap artifact + contaminated block | **DONE** |
 | D8 | UI page | PLAN (wacht op frontend-upload) |
-| D9 | Scale adapters | PLAN (optioneel) |
+| D9 | Scale adapters (Ray/Qdrant/Neo4j/lakeFS) | PLAN (optioneel) |
+
+**Shipped API:** `/v1/atlas/datasets/*` (catalog, pin/acquire, sample/recipes/approve, jobs/tick/pause, records/facets/datamap, edges/neighbors/subgraph, mixes/compile, eval-guards).
+
+**Bulk format nu:** JSONL shards onder `data/datasets/{id}/` (streaming line-format; Parquet crate later zonder API-breuk). Hub provider default `stub`.
 
 > Na elke implementatie-werkbeurt: deze tabel + `docs/datanames.md` + `docs/filenames.md` bijwerken. **Source (code) is leidend.**

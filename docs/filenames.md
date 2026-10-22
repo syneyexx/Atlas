@@ -105,14 +105,15 @@
 | `…/data/brain-config.json` | Settings (incl. research_* budgets) |
 | `…/data/atlas.db` | conversations, messages, knowledge, memory_*, documents, traces, outbox, research_* |
 | `…/data/objects/` | Content-addressed blobs (sha256) — ook research source fragments / reports |
-| `…/data/datasets/` | **Gepland (D1+):** Parquet shards / manifests per pinned dataset |
+| `…/data/datasets/` | JSONL shards + manifests per pinned dataset (D1+) |
 
-## Gepland — datasets-plane (nog geen code)
+## Backend — datasets-plane (D0–D7)
 
-Zie `docs/plan-datasets-architecture.md`. Verwachte paden bij implementatie:
-
-| Bestand (intentie) | Architectuur | Rol |
-|--------------------|--------------|-----|
+| Bestand | Architectuur | Rol |
+|---------|--------------|-----|
 | `backend/atlas-brain/src/api/datasets_api.rs` | datasets-plane | HTTP `/v1/atlas/datasets*` |
-| `backend/atlas-brain/src/brain/datasets/` | datasets-plane | Orchestrator, schema-agent, step registry, tick runner |
-| `backend/atlas-brain/src/store/datasets.rs` | datasets-plane | catalog/revisions/shards/recipes/jobs/edges/mixes |
+| `backend/atlas-brain/src/brain/datasets/mod.rs` | datasets-plane | Plane root |
+| `backend/atlas-brain/src/brain/datasets/hub.rs` | datasets-plane | Stub catalog + acquire + pin |
+| `backend/atlas-brain/src/brain/datasets/engine.rs` | datasets-plane | Recipe propose/verify, pipeline steps, mix/datamap |
+| `backend/atlas-brain/src/brain/datasets/orchestrator.rs` | datasets-plane | Job ticks, human gate, costs/artifacts |
+| `backend/atlas-brain/src/store/datasets.rs` | datasets-plane | Schema + CRUD (catalog→mixes) |

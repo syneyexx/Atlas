@@ -1,4 +1,5 @@
 mod conversations;
+mod datasets;
 mod db;
 mod documents;
 mod edges;
@@ -17,6 +18,10 @@ mod tools;
 mod traces;
 
 pub use conversations::*;
+pub use datasets::{
+    DatasetEdge, DatasetJob, DatasetMix, DatasetRecipe, DatasetRecord, DatasetRecordMeta,
+    DatasetShard, EvalGuard,
+};
 pub use db::Store;
 pub use documents::{DocumentChunk, DocumentRecord};
 pub use edges::*;

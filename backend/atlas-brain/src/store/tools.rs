@@ -181,6 +181,114 @@ impl Store {
                 "allow",
                 vec!["research.write"],
             ),
+            (
+                "datasets.search",
+                "1",
+                "Zoek dataset-cataloguskaarten (Hub stub/http)",
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "modality": {"type": "string"},
+                        "limit": {"type": "integer"}
+                    },
+                    "required": ["query"]
+                }),
+                "allow",
+                vec!["datasets.read"],
+            ),
+            (
+                "datasets.acquire",
+                "1",
+                "Pin + acquire een dataset-revisie (shards + checksums)",
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "source": {"type": "string"},
+                        "id": {"type": "string"},
+                        "revision": {"type": "string"}
+                    },
+                    "required": ["source", "id"]
+                }),
+                "ask",
+                vec!["datasets.write", "objects.write"],
+            ),
+            (
+                "datasets.run",
+                "1",
+                "Sample/full dataset-job: create, tick, pause, approve recipe",
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "action": {"type": "string", "enum": ["create","tick","pause","approve"]},
+                        "dataset_id": {"type": "string"},
+                        "job_id": {"type": "string"},
+                        "recipe_id": {"type": "string"},
+                        "kind": {"type": "string", "enum": ["sample","full"]}
+                    },
+                    "required": ["action"]
+                }),
+                "allow",
+                vec!["datasets.write"],
+            ),
+            (
+                "datasets.get_record",
+                "1",
+                "Zoek records in verwerkte datasets (FTS)",
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "dataset_id": {"type": "string"},
+                        "limit": {"type": "integer"}
+                    },
+                    "required": ["query"]
+                }),
+                "allow",
+                vec!["datasets.read"],
+            ),
+            (
+                "datasets.neighbors",
+                "1",
+                "Graph neighbors voor dataset/record node",
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "node": {"type": "string"}
+                    },
+                    "required": ["node"]
+                }),
+                "allow",
+                vec!["datasets.read"],
+            ),
+            (
+                "datasets.subgraph",
+                "1",
+                "Subgraph rond een dataset/record node",
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "node": {"type": "string"}
+                    },
+                    "required": ["node"]
+                }),
+                "allow",
+                vec!["datasets.read"],
+            ),
+            (
+                "datasets.compile_mix",
+                "1",
+                "Compileer een trainingsmix (blokkeert contaminated zonder override)",
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "mix_id": {"type": "string"}
+                    },
+                    "required": ["mix_id"]
+                }),
+                "ask",
+                vec!["datasets.export"],
+            ),
         ];
         let mut n = 0usize;
         for (name, ver, desc, schema, policy, caps) in builtins {

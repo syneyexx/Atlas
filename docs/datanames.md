@@ -126,15 +126,17 @@ Request-driven research orchestrator in Atlas Brain — geen aparte daemon, geen
 - Search: FTS5 op chunks; recall via Memory Cortex (semantic heads)
 - **Niet verwarren met Datasets:** documents = RAG-ingest van tekst/files; datasets = Hub/Parquet acquisitie → recipe → trainingscorpus
 
-### `datasets-plane` — Data → Datasets (PLAN)
+### `datasets-plane` — Data → Datasets (D0–D7 shipped)
 Cursor-klasse data-OS op één brain: Hub/local acquisitie → schema-agent/recipe → request-driven verwerkings-DAG → verrijking (kostenladder) → relatiegraaf → mix-export.
 
 - **Plan:** `docs/plan-datasets-architecture.md` (D0–D9)
-- **Status:** plan only — nog geen `/v1/atlas/datasets*` in code
-- **Invariants:** Research-achtige ticks (geen ETL-daemon); Polars/DuckDB/Arrow in-process; SQLite+Parquet first; geen Dagster/Ray/Neo4j defaults
-- **Stores (logisch 29–39):** catalog · revisions · shards · records · recipes · jobs · run artifacts · enrichment cache · dataset_edges · eval-guards · mixes
-- **Human gate:** verplicht na steekproef, vóór full run
-- **UI:** graphics later; contracts eerst
+- **Status:** **D0–D7 DONE** in `atlas-brain`; D8 UI wacht op frontend-upload; D9 scale optioneel
+- **API:** `/v1/atlas/datasets/catalog/*` · `POST/GET /datasets` · `…/acquire` · `…/sample` · recipes/verify/approve · jobs/tick/pause · records/facets/datamap · edges/neighbors/subgraph · mixes/compile · eval-guards
+- **Invariants:** Research-achtige ticks (geen ETL-daemon); JSONL streaming in-process; SQLite + `data/datasets/`; geen Dagster/Ray/Neo4j defaults
+- **Stores:** `dataset_catalog_cache` · `datasets` · `dataset_shards` · `dataset_recipes` · `dataset_jobs` · `dataset_events` · `dataset_records` (+ FTS) · `dataset_edges` · `enrichment_cache` · `eval_guards` · `dataset_mixes`
+- **Tools (seeded):** `datasets.search` · `acquire` · `run` · `get_record` · `neighbors` · `subgraph` · `compile_mix`
+- **Human gate:** verplicht na steekproef (`await_approval`), vóór full run
+- **UI:** graphics later; contracts live
 - **Productpositie:** onder Data naast Research (Research = web→rapport; Datasets = corpus→mix)
 
 ### `knowledge-store` — Compat
@@ -151,7 +153,7 @@ Frames: SYSTEM_PROMPT → self → router? → semantic → procedural → episo
 | Naam | Intentie |
 |------|----------|
 | `trading-engine` / workspaces / crawlers | Plugins op dezelfde brain |
-| `data-workspace` UI | Product shell: Research live; **Datasets** volgt plan D0–D8 |
+| `data-workspace` UI | Product shell: Research live; Datasets API live (D0–D7); **UI D8** volgt upload |
 | `coding-workspace` UI | Product shell (code-index API al live) |
 | `pdf.read` / `code.sandbox` research tools | Fase 2 research tools |
 | `ethics-layer` / `security-layer` | Laatst |

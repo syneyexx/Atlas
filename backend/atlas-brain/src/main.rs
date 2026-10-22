@@ -34,6 +34,7 @@ async fn main() {
     let bind = config.bind.clone();
     let cors_origins = config.cors_origins.clone();
     let store = Store::open(&config).expect("open atlas store");
+    let _ = brain::datasets::seed_stub_catalog(&store);
 
     let state = AppState {
         config: Arc::new(RwLock::new(config)),

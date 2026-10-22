@@ -276,7 +276,7 @@ score = α·vector + β·bm25 + γ·recency + δ·salience + ε·graph_prior
 - Feedback store; corrections → training_examples
 - Semantic cache (opt-in `semantic_cache_enabled`, invalidate on settings change)
 - APIs: `/v1/atlas/evals/*`, `/feedback`, `/training`, `/cache`
-- **Note:** volledige trainingsmix / Hub-datasets = `docs/plan-datasets-architecture.md` (niet M4 scope)
+- **Note:** volledige trainingsmix / Hub-datasets = Datasets plane D0–D7 shipped (`docs/plan-datasets-architecture.md`)
 
 ### Milestone 5 — DONE
 - EngineBundle: `sqlite` | `dual` | `postgres` + env (`ATLAS_*`)
