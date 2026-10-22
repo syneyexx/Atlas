@@ -73,14 +73,21 @@ Stub-LM: deterministische distill uit brontekst.
 
 **Store:** `memory_nodes` · `memory_embeddings` · `working_memory` · `memory_edges` · FTS · `traces` · `outbox`
 
-### `store-plane` — Logische stores (plan → M0–M4 done)
+### `store-plane` — Logische stores (plan → M0–M5 done)
 Wereldklasse stores-architectuur: **28 logische stores**, engines gefaseerd (SQLite → Postgres/Redis/S3).
 
-- **Plan:** `docs/plan-stores-architecture.md`
-- **M0–M4 shipped** op SQLite; M5 = engine adapters bij schaal
-- **API surface:** traces · outbox · edges · documents · tools · tasks · prompts · models/registry · evals · feedback · training · cache
+- **Plan:** `docs/plan-stores-architecture.md` · **Engines:** `docs/engines.md`
+- **M0–M5 shipped** — SQLite default; dual-write Postgres + Redis + S3/MinIO
+- **API surface:** traces · outbox · edges · documents · tools · tasks · prompts · models/registry · evals · feedback · training · cache · engines · projects · artifacts · costs · secrets · code
 - **Hybrid recall:** α·vector + β·lex + γ·BM25; hop-2 volgt edge-neighbors
 - **Outbox:** drain on chat/ingest (+ expliciete POST)
+
+### `scale-adapters` — Physical engines (M5)
+- **Postgres:** schema migrate + dual-write mirror van kritische stores
+- **Redis:** working memory + semantic cache hot path
+- **S3/MinIO:** content-addressed objects (+ local mirror)
+- **Code index:** `code_files` / `code_symbols` + FTS search
+- **Status:** `GET /v1/atlas/engines`
 
 ### `agent-os` — Aansturing (M3)
 - **Tools:** versioned schemas + policy `allow|deny|ask` + capabilities; builtins seeded
@@ -106,16 +113,15 @@ Frames: SYSTEM_PROMPT → self → router? → semantic → procedural → episo
 
 ---
 
-## Gereserveerd (nog niet / later)
+## Gereserveerd (plugins / later)
 
 | Naam | Intentie |
 |------|----------|
-| `trace-eval-loop` | Traces → feedback → eval → training dataset (M4) |
-| `semantic-cache` | Answer reuse + invalidation (M4) |
-| `trading-engine` / workspaces / crawlers | Plugins |
-| `data-workspace` / `coding-workspace` | Later (+ code/AST index) |
+| `trading-engine` / workspaces / crawlers | Plugins op dezelfde brain |
+| `data-workspace` / `coding-workspace` UI | Product shells (code-index API al live) |
 | `ethics-layer` / `security-layer` | Laatst |
-| `cnn-memory` / `rnn-episode` | Later |
+| `graph-scale` (AGE/Neo4j) | Alleen bij meetbare edge-volume |
+| `cnn-memory` / `rnn-episode` | Experimenteel |
 
 ---
 

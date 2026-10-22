@@ -274,9 +274,12 @@ score = α·vector + β·bm25 + γ·recency + δ·salience + ε·graph_prior
 - Semantic cache (opt-in `semantic_cache_enabled`, invalidate on settings change)
 - APIs: `/v1/atlas/evals/*`, `/feedback`, `/training`, `/cache`
 
-### Volgende: Milestone 5 (Scale adapters)
-1. Store traits + Postgres backend (pgvector/FTS/JSONB)
-2. Redis adapter voor working/cache bij multi-instance
-3. S3/MinIO voor objects
-4. AGE/Neo4j alleen bij meetbare edge-scale
-5. Code/AST index plugin voor coding-workspace
+### Milestone 5 — DONE
+- EngineBundle: `sqlite` | `dual` | `postgres` + env (`ATLAS_*`)
+- Postgres schema migrate (pgvector best-effort) + dual-write mirror (memory, edges, working, traces, outbox, documents, costs, projects, artifacts, secrets)
+- Redis hot path: working KV + semantic cache TTL
+- S3/MinIO object backend + local mirror
+- Gap stores: projects · artifacts · cost ledger · secrets (AES-GCM) · code/AST FTS index
+- APIs: `/v1/atlas/engines`, `/projects*`, `/artifacts*`, `/costs`, `/secrets*`, `/code/*`
+- Compose: `docker-compose.yml` (Postgres+pgvector, Redis, MinIO)
+- Docs: `docs/engines.md`

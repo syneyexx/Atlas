@@ -1,18 +1,23 @@
+use crate::config::BrainConfig;
 use crate::error::AtlasResult;
+use crate::store::engines::EngineBundle;
 use crate::store::{ConversationRecord, KnowledgeNode};
 use rusqlite::{params, Connection};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 pub struct Store {
     pub(crate) conn: Mutex<Connection>,
+    pub(crate) engines: EngineBundle,
+    pub(crate) data_dir: PathBuf,
 }
 
 impl Store {
-    pub fn open(data_dir: &Path) -> AtlasResult<Self> {
-        std::fs::create_dir_all(data_dir)?;
+    pub fn open(cfg: &BrainConfig) -> AtlasResult<Self> {
+        let data_dir = cfg.data_dir.clone();
+        std::fs::create_dir_all(&data_dir)?;
         let path = data_dir.join("atlas.db");
-        let conn = Connection::open(path)?;
+        let conn = Connection::open(&path)?;
         conn.execute_batch(
             "
             PRAGMA journal_mode=WAL;
@@ -32,17 +37,31 @@ impl Store {
             );
             ",
         )?;
+        let engines = EngineBundle::from_config(cfg)?;
         let store = Self {
             conn: Mutex::new(conn),
+            engines,
+            data_dir,
         };
         store.migrate_memory_schema()?;
         store.migrate_store_plane_schema()?;
         store.migrate_documents_schema()?;
         store.migrate_agent_os_schema()?;
         store.migrate_eval_schema()?;
+        store.migrate_platform_schema()?;
         let _ = store.migrate_messages_from_blobs()?;
         let _ = store.seed_builtin_tools()?;
+        tracing::info!(engines = %store.engines.status_json(), "store plane engines");
         Ok(store)
+    }
+
+    pub fn engine_status(&self) -> serde_json::Value {
+        self.engines.status_json()
+    }
+
+    #[allow(dead_code)]
+    pub fn data_dir(&self) -> &Path {
+        &self.data_dir
     }
 
     pub fn list_conversations(&self) -> AtlasResult<Vec<ConversationRecord>> {

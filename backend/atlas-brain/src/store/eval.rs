@@ -314,6 +314,19 @@ impl Store {
     }
 
     pub fn cache_get(&self, key: &str) -> AtlasResult<Option<SemanticCacheEntry>> {
+        if let Some(redis) = &self.engines.redis {
+            if let Some((response, model_id)) = redis.cache_get(key)? {
+                let now = Utc::now().to_rfc3339();
+                return Ok(Some(SemanticCacheEntry {
+                    cache_key: key.to_string(),
+                    response,
+                    model_id,
+                    hit_count: 1,
+                    created_at: now.clone(),
+                    updated_at: now,
+                }));
+            }
+        }
         let conn = self.conn.lock().expect("store lock");
         let mut stmt = conn.prepare(
             "SELECT cache_key, response, model_id, hit_count, created_at, updated_at
@@ -342,22 +355,31 @@ impl Store {
 
     pub fn cache_put(&self, key: &str, response: &str, model_id: &str) -> AtlasResult<()> {
         let now = Utc::now().to_rfc3339();
-        let conn = self.conn.lock().expect("store lock");
-        conn.execute(
-            "INSERT INTO semantic_cache (cache_key, response, model_id, hit_count, created_at, updated_at)
-             VALUES (?1,?2,?3,0,?4,?4)
-             ON CONFLICT(cache_key) DO UPDATE SET
-               response=excluded.response,
-               model_id=excluded.model_id,
-               updated_at=excluded.updated_at",
-            params![key, response, model_id, now],
-        )?;
+        {
+            let conn = self.conn.lock().expect("store lock");
+            conn.execute(
+                "INSERT INTO semantic_cache (cache_key, response, model_id, hit_count, created_at, updated_at)
+                 VALUES (?1,?2,?3,0,?4,?4)
+                 ON CONFLICT(cache_key) DO UPDATE SET
+                   response=excluded.response,
+                   model_id=excluded.model_id,
+                   updated_at=excluded.updated_at",
+                params![key, response, model_id, now],
+            )?;
+        }
+        if let Some(redis) = &self.engines.redis {
+            redis.cache_put(key, response, model_id, self.engines.cache_ttl_secs)?;
+        }
         Ok(())
     }
 
     pub fn cache_invalidate_all(&self) -> AtlasResult<usize> {
+        let mut n = 0usize;
+        if let Some(redis) = &self.engines.redis {
+            n += redis.cache_clear()?;
+        }
         let conn = self.conn.lock().expect("store lock");
-        let n = conn.execute("DELETE FROM semantic_cache", [])?;
+        n += conn.execute("DELETE FROM semantic_cache", [])?;
         Ok(n)
     }
 

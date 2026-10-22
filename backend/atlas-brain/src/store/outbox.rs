@@ -21,12 +21,26 @@ impl Store {
     pub fn enqueue_outbox(&self, event_type: &str, payload: &Value) -> AtlasResult<String> {
         let id = Uuid::new_v4().to_string();
         let created_at = Utc::now().to_rfc3339();
-        let conn = self.conn.lock().expect("store lock");
-        conn.execute(
-            "INSERT INTO outbox (id, event_type, payload_json, created_at, processed_at)
-             VALUES (?1, ?2, ?3, ?4, NULL)",
-            params![id, event_type, serde_json::to_string(payload)?, created_at],
-        )?;
+        let payload_json = serde_json::to_string(payload)?;
+        {
+            let conn = self.conn.lock().expect("store lock");
+            conn.execute(
+                "INSERT INTO outbox (id, event_type, payload_json, created_at, processed_at)
+                 VALUES (?1, ?2, ?3, ?4, NULL)",
+                params![id, event_type, payload_json, created_at],
+            )?;
+        }
+        if let Some(pg) = &self.engines.postgres {
+            if let Err(err) = crate::store::engines::pg_mirror::mirror_outbox(
+                pg,
+                &id,
+                event_type,
+                &payload_json,
+                &created_at,
+            ) {
+                tracing::warn!("postgres mirror outbox failed: {err}");
+            }
+        }
         Ok(id)
     }
 
@@ -47,16 +61,28 @@ impl Store {
     }
 
     pub fn mark_outbox_processed(&self, id: &str) -> AtlasResult<bool> {
-        let conn = self.conn.lock().expect("store lock");
-        let n = conn.execute(
-            "UPDATE outbox SET processed_at = ?1 WHERE id = ?2 AND processed_at IS NULL",
-            params![Utc::now().to_rfc3339(), id],
-        )?;
+        let processed_at = Utc::now().to_rfc3339();
+        let n = {
+            let conn = self.conn.lock().expect("store lock");
+            conn.execute(
+                "UPDATE outbox SET processed_at = ?1 WHERE id = ?2 AND processed_at IS NULL",
+                params![processed_at, id],
+            )?
+        };
+        if n > 0 {
+            if let Some(pg) = &self.engines.postgres {
+                if let Err(err) =
+                    crate::store::engines::pg_mirror::mirror_outbox_processed(pg, id, &processed_at)
+                {
+                    tracing::warn!("postgres mirror outbox processed failed: {err}");
+                }
+            }
+        }
         Ok(n > 0)
     }
 
-    /// Request-driven drain: mark pending events processed.
-    /// Handlers for specific event types can be added later (consolidate, reindex).
+    /// Request-driven drain: mark pending events processed (durable ack).
+    /// Event payloads remain queryable via traces/outbox APIs for replay.
     pub fn drain_outbox(&self, limit: usize) -> AtlasResult<DrainResult> {
         let pending = self.list_pending_outbox(limit)?;
         let mut processed = 0usize;

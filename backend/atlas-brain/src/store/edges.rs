@@ -31,21 +31,28 @@ impl Store {
         let created_at = Utc::now().to_rfc3339();
         let weight = weight.clamp(0.0, 10.0);
         let prov = serde_json::to_string(provenance)?;
-        let conn = self.conn.lock().expect("store lock");
-        conn.execute(
-            "INSERT INTO memory_edges (id, src_id, rel, dst_id, weight, provenance_json, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-             ON CONFLICT(src_id, rel, dst_id) DO UPDATE SET
-               weight=excluded.weight,
-               provenance_json=excluded.provenance_json",
-            params![id, src_id, rel, dst_id, weight, prov, created_at],
-        )?;
-        // Re-read canonical id after upsert (conflict keeps old id).
-        let mut stmt = conn.prepare(
-            "SELECT id, src_id, rel, dst_id, weight, provenance_json, created_at
-             FROM memory_edges WHERE src_id = ?1 AND rel = ?2 AND dst_id = ?3",
-        )?;
-        let edge = stmt.query_row(params![src_id, rel, dst_id], map_edge)?;
+        let edge = {
+            let conn = self.conn.lock().expect("store lock");
+            conn.execute(
+                "INSERT INTO memory_edges (id, src_id, rel, dst_id, weight, provenance_json, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                 ON CONFLICT(src_id, rel, dst_id) DO UPDATE SET
+                   weight=excluded.weight,
+                   provenance_json=excluded.provenance_json",
+                params![id, src_id, rel, dst_id, weight, prov, created_at],
+            )?;
+            // Re-read canonical id after upsert (conflict keeps old id).
+            let mut stmt = conn.prepare(
+                "SELECT id, src_id, rel, dst_id, weight, provenance_json, created_at
+                 FROM memory_edges WHERE src_id = ?1 AND rel = ?2 AND dst_id = ?3",
+            )?;
+            stmt.query_row(params![src_id, rel, dst_id], map_edge)?
+        };
+        if let Some(pg) = &self.engines.postgres {
+            if let Err(err) = crate::store::engines::pg_mirror::mirror_edge(pg, &edge) {
+                tracing::warn!("postgres mirror edge failed: {err}");
+            }
+        }
         Ok(edge)
     }
 

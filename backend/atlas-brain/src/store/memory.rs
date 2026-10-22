@@ -128,6 +128,11 @@ impl Store {
                 }),
             );
         }
+        if let Some(pg) = &self.engines.postgres {
+            if let Err(err) = crate::store::engines::pg_mirror::mirror_memory_node(pg, node) {
+                tracing::warn!("postgres mirror memory_node failed: {err}");
+            }
+        }
         Ok(())
     }
 
@@ -345,6 +350,11 @@ impl Store {
         &self,
         conversation_id: &str,
     ) -> AtlasResult<Option<crate::memory::working::WorkingMemoryState>> {
+        if let Some(redis) = &self.engines.redis {
+            if let Some(state) = redis.get_working(conversation_id)? {
+                return Ok(Some(state));
+            }
+        }
         let conn = self.conn.lock().expect("store lock");
         let mut stmt = conn.prepare(
             "SELECT state_json FROM working_memory WHERE conversation_id = ?1",
@@ -363,23 +373,44 @@ impl Store {
         state: &crate::memory::working::WorkingMemoryState,
         query_embedding: Option<&[u8]>,
     ) -> AtlasResult<()> {
-        let conn = self.conn.lock().expect("store lock");
-        conn.execute(
-            "INSERT INTO working_memory (conversation_id, state_json, query_embedding, updated_at, expires_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)
-             ON CONFLICT(conversation_id) DO UPDATE SET
-               state_json=excluded.state_json,
-               query_embedding=COALESCE(excluded.query_embedding, working_memory.query_embedding),
-               updated_at=excluded.updated_at,
-               expires_at=excluded.expires_at",
-            params![
-                state.conversation_id,
-                serde_json::to_string(state)?,
-                query_embedding,
-                state.updated_at,
-                state.expires_at,
-            ],
-        )?;
+        // Durable sqlite copy always; Redis is hot path when configured.
+        {
+            let conn = self.conn.lock().expect("store lock");
+            conn.execute(
+                "INSERT INTO working_memory (conversation_id, state_json, query_embedding, updated_at, expires_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5)
+                 ON CONFLICT(conversation_id) DO UPDATE SET
+                   state_json=excluded.state_json,
+                   query_embedding=COALESCE(excluded.query_embedding, working_memory.query_embedding),
+                   updated_at=excluded.updated_at,
+                   expires_at=excluded.expires_at",
+                params![
+                    state.conversation_id,
+                    serde_json::to_string(state)?,
+                    query_embedding,
+                    state.updated_at,
+                    state.expires_at,
+                ],
+            )?;
+        }
+        if let Some(redis) = &self.engines.redis {
+            let ttl = chrono::DateTime::parse_from_rfc3339(&state.expires_at)
+                .ok()
+                .map(|dt| {
+                    (dt.with_timezone(&chrono::Utc) - chrono::Utc::now())
+                        .num_seconds()
+                        .max(60) as u64
+                })
+                .unwrap_or(3600);
+            redis.set_working(state, ttl)?;
+        }
+        if let Some(pg) = &self.engines.postgres {
+            if let Err(err) =
+                crate::store::engines::pg_mirror::mirror_working(pg, state, query_embedding)
+            {
+                tracing::warn!("postgres mirror working failed: {err}");
+            }
+        }
         Ok(())
     }
 
@@ -394,6 +425,9 @@ impl Store {
     }
 
     pub fn delete_working_memory(&self, conversation_id: &str) -> AtlasResult<bool> {
+        if let Some(redis) = &self.engines.redis {
+            let _ = redis.delete_working(conversation_id)?;
+        }
         let conn = self.conn.lock().expect("store lock");
         let n = conn.execute(
             "DELETE FROM working_memory WHERE conversation_id = ?1",

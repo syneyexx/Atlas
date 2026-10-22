@@ -103,6 +103,7 @@ pub async fn chat_completions(
         }
     }
 
+    let started = std::time::Instant::now();
     let outcome = run_completion(
         &cfg,
         &state.store,
@@ -112,6 +113,24 @@ pub async fn chat_completions(
         conversation_id.as_deref(),
     )
     .await?;
+    let latency_ms = started.elapsed().as_millis() as i64;
+    // Approx token ledger (chars/4); cost_usd stays 0 until model pricing is configured.
+    let token_in = conversation
+        .iter()
+        .map(|m| (m.content.chars().count() + 3) / 4)
+        .sum::<usize>() as i64;
+    let token_out = ((outcome.answer.chars().count() + 3) / 4) as i64;
+    let _ = state.store.insert_cost(&crate::store::CostEntry {
+        id: Uuid::new_v4().to_string(),
+        trace_id: outcome.trace_id.clone(),
+        conversation_id: conversation_id.clone(),
+        model_id: Some(cfg.model_id.clone()),
+        token_in,
+        token_out,
+        latency_ms,
+        cost_usd: 0.0,
+        created_at: Utc::now().to_rfc3339(),
+    });
     if let Some(ref key) = cache_key {
         let _ = state
             .store
@@ -214,6 +233,10 @@ pub async fn chat_completions(
             "trace_id": outcome.trace_id,
             "hit_ids": outcome.hit_ids,
             "outbox_drained": drain.processed,
+            "token_in": token_in,
+            "token_out": token_out,
+            "latency_ms": latency_ms,
+            "engines": state.store.engine_status(),
         },
         "choices": [{
             "index": 0,

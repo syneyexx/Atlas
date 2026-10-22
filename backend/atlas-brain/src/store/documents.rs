@@ -74,50 +74,64 @@ impl Store {
     }
 
     pub fn upsert_document(&self, doc: &DocumentRecord) -> AtlasResult<()> {
-        let conn = self.conn.lock().expect("store lock");
-        conn.execute(
-            "INSERT INTO documents (id, title, source, media_type, object_hash, metadata_json, created_at, updated_at)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8)
-             ON CONFLICT(id) DO UPDATE SET
-               title=excluded.title,
-               source=excluded.source,
-               media_type=excluded.media_type,
-               object_hash=excluded.object_hash,
-               metadata_json=excluded.metadata_json,
-               updated_at=excluded.updated_at",
-            params![
-                doc.id,
-                doc.title,
-                doc.source,
-                doc.media_type,
-                doc.object_hash,
-                serde_json::to_string(&doc.metadata)?,
-                doc.created_at,
-                doc.updated_at
-            ],
-        )?;
+        {
+            let conn = self.conn.lock().expect("store lock");
+            conn.execute(
+                "INSERT INTO documents (id, title, source, media_type, object_hash, metadata_json, created_at, updated_at)
+                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8)
+                 ON CONFLICT(id) DO UPDATE SET
+                   title=excluded.title,
+                   source=excluded.source,
+                   media_type=excluded.media_type,
+                   object_hash=excluded.object_hash,
+                   metadata_json=excluded.metadata_json,
+                   updated_at=excluded.updated_at",
+                params![
+                    doc.id,
+                    doc.title,
+                    doc.source,
+                    doc.media_type,
+                    doc.object_hash,
+                    serde_json::to_string(&doc.metadata)?,
+                    doc.created_at,
+                    doc.updated_at
+                ],
+            )?;
+        }
+        if let Some(pg) = &self.engines.postgres {
+            if let Err(err) = crate::store::engines::pg_mirror::mirror_document(pg, doc) {
+                tracing::warn!("postgres mirror document failed: {err}");
+            }
+        }
         Ok(())
     }
 
     pub fn insert_document_chunk(&self, chunk: &DocumentChunk, title: &str) -> AtlasResult<()> {
-        let conn = self.conn.lock().expect("store lock");
-        conn.execute(
-            "INSERT INTO document_chunks (id, document_id, seq, content, memory_node_id, created_at)
-             VALUES (?1,?2,?3,?4,?5,?6)",
-            params![
-                chunk.id,
-                chunk.document_id,
-                chunk.seq,
-                chunk.content,
-                chunk.memory_node_id,
-                chunk.created_at
-            ],
-        )?;
-        conn.execute(
-            "INSERT INTO documents_fts (document_id, chunk_id, title, content)
-             VALUES (?1, ?2, ?3, ?4)",
-            params![chunk.document_id, chunk.id, title, chunk.content],
-        )?;
+        {
+            let conn = self.conn.lock().expect("store lock");
+            conn.execute(
+                "INSERT INTO document_chunks (id, document_id, seq, content, memory_node_id, created_at)
+                 VALUES (?1,?2,?3,?4,?5,?6)",
+                params![
+                    chunk.id,
+                    chunk.document_id,
+                    chunk.seq,
+                    chunk.content,
+                    chunk.memory_node_id,
+                    chunk.created_at
+                ],
+            )?;
+            conn.execute(
+                "INSERT INTO documents_fts (document_id, chunk_id, title, content)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![chunk.document_id, chunk.id, title, chunk.content],
+            )?;
+        }
+        if let Some(pg) = &self.engines.postgres {
+            if let Err(err) = crate::store::engines::pg_mirror::mirror_document_chunk(pg, chunk) {
+                tracing::warn!("postgres mirror document_chunk failed: {err}");
+            }
+        }
         Ok(())
     }
 

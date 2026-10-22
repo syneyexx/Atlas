@@ -7,6 +7,7 @@ mod eval_api;
 mod knowledge;
 mod memory_api;
 mod models;
+mod platform_api;
 mod store_api;
 
 use crate::state::AppState;
@@ -117,4 +118,24 @@ pub fn router() -> Router<AppState> {
                 .post(eval_api::cache_put)
                 .delete(eval_api::cache_clear),
         )
+        // Platform / M5 gap stores
+        .route("/v1/atlas/engines", get(platform_api::engines))
+        .route(
+            "/v1/atlas/projects",
+            get(platform_api::list_projects).post(platform_api::upsert_project),
+        )
+        .route("/v1/atlas/projects/{id}", get(platform_api::get_project))
+        .route(
+            "/v1/atlas/artifacts",
+            get(platform_api::list_artifacts).post(platform_api::create_artifact),
+        )
+        .route("/v1/atlas/costs", get(platform_api::list_costs))
+        .route(
+            "/v1/atlas/secrets",
+            get(platform_api::list_secrets).post(platform_api::put_secret),
+        )
+        .route("/v1/atlas/secrets/{name}", get(platform_api::get_secret))
+        .route("/v1/atlas/code/index", post(platform_api::index_code))
+        .route("/v1/atlas/code/search", get(platform_api::search_code))
+        .route("/v1/atlas/objects/{hash}", get(platform_api::get_object))
 }

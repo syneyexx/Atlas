@@ -29,19 +29,35 @@ impl Store {
     ) -> AtlasResult<String> {
         let id = Uuid::new_v4().to_string();
         let created_at = Utc::now().to_rfc3339();
-        let conn = self.conn.lock().expect("store lock");
-        conn.execute(
-            "INSERT INTO traces (id, kind, conversation_id, model_id, payload_json, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![
-                id,
+        let payload_json = serde_json::to_string(payload)?;
+        {
+            let conn = self.conn.lock().expect("store lock");
+            conn.execute(
+                "INSERT INTO traces (id, kind, conversation_id, model_id, payload_json, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    id,
+                    kind,
+                    conversation_id,
+                    model_id,
+                    payload_json,
+                    created_at
+                ],
+            )?;
+        }
+        if let Some(pg) = &self.engines.postgres {
+            if let Err(err) = crate::store::engines::pg_mirror::mirror_trace(
+                pg,
+                &id,
                 kind,
                 conversation_id,
                 model_id,
-                serde_json::to_string(payload)?,
-                created_at
-            ],
-        )?;
+                &payload_json,
+                &created_at,
+            ) {
+                tracing::warn!("postgres mirror trace failed: {err}");
+            }
+        }
         Ok(id)
     }
 

@@ -11,6 +11,8 @@
 | `docs/datanames.md` | docs | Architectuurkaart |
 | `docs/filenames.md` | docs | Deze index |
 | `docs/plan-stores-architecture.md` | store-plane | Wereldklasse stores-plan (28 logical / gefaseerde engines) |
+| `docs/engines.md` | scale-adapters | M5 engine config (Postgres/Redis/S3) |
+| `docker-compose.yml` | scale-adapters | Postgres + Redis + MinIO |
 | `frontend/` | frontend | React UI |
 | `backend/atlas-brain/` | atlas-brain | Brain + Memory Cortex |
 
@@ -46,6 +48,7 @@
 | `backend/atlas-brain/src/api/documents.rs` | document-rag | document ingest / search / CRUD |
 | `backend/atlas-brain/src/api/agent_api.rs` | agent-os | tools / tasks / prompts / model registry |
 | `backend/atlas-brain/src/api/eval_api.rs` | improvement-loop | evals / feedback / training / cache |
+| `backend/atlas-brain/src/api/platform_api.rs` | scale-adapters | engines / projects / artifacts / costs / secrets / code |
 | `backend/atlas-brain/src/lm/client.rs` | local-lm-client | LM HTTP/stub |
 | `backend/atlas-brain/src/brain/pipeline.rs` | neural-pipeline | Cortex → LM + durable trace |
 | `backend/atlas-brain/rust-toolchain.toml` | atlas-brain | Pin stable rustc |
@@ -75,9 +78,13 @@
 | `backend/atlas-brain/src/store/tools.rs` | agent-os | Tool registry + policy |
 | `backend/atlas-brain/src/store/tasks.rs` | agent-os | Tasks + checkpoints |
 | `backend/atlas-brain/src/store/prompts.rs` | agent-os | Prompt versions + model registry |
+| `backend/atlas-brain/src/store/eval.rs` | improvement-loop | eval/feedback/training/cache tables |
+| `backend/atlas-brain/src/memory/eval_runner.rs` | improvement-loop | Request-driven eval suite runner |
 | `backend/atlas-brain/src/store/edges.rs` | store-plane | memory_edges CRUD |
 | `backend/atlas-brain/src/store/traces.rs` | store-plane | Append-only audit traces |
 | `backend/atlas-brain/src/store/outbox.rs` | store-plane | Durable events (request-drain) |
+| `backend/atlas-brain/src/store/platform.rs` | scale-adapters | projects / artifacts / costs / secrets / code index |
+| `backend/atlas-brain/src/store/engines/` | scale-adapters | EngineBundle · Postgres · Redis · S3 · pg_mirror |
 | `backend/atlas-brain/src/store/knowledge.rs` | knowledge-store | Legacy types |
 
 ## Runtime data (niet in git)

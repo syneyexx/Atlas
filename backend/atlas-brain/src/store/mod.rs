@@ -2,12 +2,14 @@ mod conversations;
 mod db;
 mod documents;
 mod edges;
+pub mod engines;
 mod eval;
 mod knowledge;
 mod memory;
 mod objects;
 mod outbox;
 mod plane;
+mod platform;
 mod prompts;
 mod tasks;
 mod tools;
@@ -17,11 +19,10 @@ pub use conversations::*;
 pub use db::Store;
 pub use documents::{DocumentChunk, DocumentRecord};
 pub use edges::*;
-pub use eval::{
-    EvalCase, EvalRun, FeedbackRecord, SemanticCacheEntry, TrainingExample,
-};
+pub use eval::{EvalCase, EvalRun, FeedbackRecord, TrainingExample};
 pub use knowledge::*;
 pub use outbox::{DrainResult, OutboxEvent};
+pub use platform::{ArtifactRecord, CostEntry, ProjectRecord};
 pub use prompts::{ModelRegistryEntry, PromptVersion};
 pub use tasks::{TaskCheckpoint, TaskRecord};
 pub use tools::ToolRecord;
