@@ -73,6 +73,20 @@ pub async fn multi_head_recall(
         expert_top_k(top_k.max(4), router.self_profile),
     )?);
     heads.push(run_head(
+        "procedural",
+        router.procedural,
+        &nodes,
+        store,
+        cfg,
+        &query_vec,
+        &query_lex,
+        &fts_ranks,
+        conversation_id,
+        now,
+        |n| n.kind == MemoryKind::Procedural,
+        expert_top_k(top_k, router.procedural.max(0.15)),
+    )?);
+    heads.push(run_head(
         "lexical",
         0.2 + 0.3 * router.semantic,
         &nodes,

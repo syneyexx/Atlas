@@ -30,6 +30,8 @@ pub struct BrainConfig {
     pub memory_token_budget: usize,
     pub memory_chunk_chars: usize,
     pub memory_dedupe_threshold: f64,
+    /// Similarity floor for conflict detection (below dedupe, above noise).
+    pub memory_conflict_sim_low: f64,
     pub memory_decay_lambda: f64,
     pub memory_min_salience: f64,
     pub memory_min_hit_score: f64,
@@ -68,6 +70,7 @@ impl Default for BrainConfig {
             memory_token_budget: 1800,
             memory_chunk_chars: 1800,
             memory_dedupe_threshold: 0.92,
+            memory_conflict_sim_low: 0.78,
             memory_decay_lambda: 0.002,
             memory_min_salience: 0.02,
             memory_min_hit_score: 0.04,

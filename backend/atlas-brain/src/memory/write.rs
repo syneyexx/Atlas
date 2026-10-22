@@ -35,13 +35,6 @@ impl WriteGovernor {
             .as_deref()
             .and_then(MemoryKind::parse)
             .unwrap_or(MemoryKind::Semantic);
-        if kind == MemoryKind::Procedural {
-            return Ok(WriteDecision {
-                action: WriteAction::Discarded,
-                node: None,
-                reason: "procedural memory is later — nog niet schrijfbaar".into(),
-            });
-        }
 
         let source = req
             .source
@@ -80,6 +73,7 @@ impl WriteGovernor {
                 chunk,
                 req.tags.clone(),
                 req.conversation_id.clone(),
+                req.parent_ids.clone(),
             )
             .await?;
             last = Some(decision);
@@ -100,9 +94,11 @@ async fn commit_one(
     content: String,
     tags: Vec<String>,
     conversation_id: Option<String>,
+    parent_ids: Vec<String>,
 ) -> AtlasResult<WriteDecision> {
     let vector = embed.embed(cfg, &format!("{title}\n{content}")).await?;
     let existing = store.list_memory_nodes(Some(kind))?;
+    let conflict_low = cfg.memory_conflict_sim_low.clamp(0.5, cfg.memory_dedupe_threshold);
 
     // Near-duplicate → dedupe (keep stronger salience).
     for node in &existing {
@@ -123,6 +119,7 @@ async fn commit_one(
                 && node.title.eq_ignore_ascii_case(&title)
                 && sim >= cfg.memory_dedupe_threshold * 0.85
                 && node.content != content
+                && !content_diverges(&node.content, &content)
             {
                 let mut merged = node.clone();
                 merged.content = format!("{}\n---\n{content}", node.content);
@@ -144,6 +141,79 @@ async fn commit_one(
                     reason: format!("samengevoegd met {}", node.id),
                 });
             }
+
+            // Conflict / truth: same neighborhood, divergent claims — keep both + edge.
+            if matches!(kind, MemoryKind::Semantic | MemoryKind::Procedural | MemoryKind::SelfProfile)
+                && sim >= conflict_low
+                && content_diverges(&node.content, &content)
+            {
+                let now = Utc::now().to_rfc3339();
+                let mut parents = parent_ids.clone();
+                if !parents.contains(&node.id) {
+                    parents.push(node.id.clone());
+                }
+                let new_node = MemoryNode {
+                    id: Uuid::new_v4().to_string(),
+                    kind,
+                    title: title.clone(),
+                    content: content.clone(),
+                    tags: tags.clone(),
+                    provenance: Provenance {
+                        source,
+                        created_at: now.clone(),
+                        parent_ids: parents,
+                        confidence,
+                        scope,
+                        conversation_id: conversation_id.clone(),
+                    },
+                    salience: 1.0,
+                    decay: 1.0,
+                    archived_at: None,
+                    updated_at: now,
+                };
+                store.upsert_memory_node(&new_node)?;
+                store.upsert_embedding(&new_node.id, &vector, &embed_model_key(cfg))?;
+
+                // Soften the older claim slightly — both remain retrievable.
+                let mut older = node.clone();
+                older.provenance.confidence =
+                    (older.provenance.confidence * 0.92).clamp(0.05, 1.0);
+                older.updated_at = Utc::now().to_rfc3339();
+                let _ = store.upsert_memory_node(&older);
+
+                let _ = store.upsert_edge(
+                    &older.id,
+                    "conflicts_with",
+                    &new_node.id,
+                    sim,
+                    &serde_json::json!({
+                        "source": "write_governor",
+                        "sim": sim,
+                        "reason": "divergent content in same neighborhood",
+                    }),
+                );
+
+                if kind == MemoryKind::Semantic {
+                    let _ = store.mirror_knowledge_from_memory(&new_node);
+                }
+                let _ = store.enqueue_outbox(
+                    "memory.conflict",
+                    &serde_json::json!({
+                        "node_id": new_node.id,
+                        "conflicts_with": older.id,
+                        "sim": sim,
+                        "kind": kind.as_str(),
+                    }),
+                );
+                return Ok(WriteDecision {
+                    action: WriteAction::Conflicted,
+                    node: Some(new_node),
+                    reason: format!(
+                        "conflict met {} (sim={sim:.3}) — beide bewaard + conflicts_with edge",
+                        node.id
+                    ),
+                });
+            }
         }
     }
 
@@ -157,12 +227,16 @@ async fn commit_one(
         provenance: Provenance {
             source,
             created_at: now.clone(),
-            parent_ids: Vec::new(),
+            parent_ids,
             confidence,
             scope,
             conversation_id,
         },
-        salience: 1.0,
+        salience: if kind == MemoryKind::Procedural {
+            1.15
+        } else {
+            1.0
+        },
         decay: 1.0,
         archived_at: None,
         updated_at: now,
@@ -201,6 +275,35 @@ pub fn embed_model_key(cfg: &BrainConfig) -> String {
     format!("{}:{model}", cfg.embed_provider)
 }
 
+/// True when two texts are about a similar topic but assert different content.
+fn content_diverges(a: &str, b: &str) -> bool {
+    if a.trim().eq_ignore_ascii_case(b.trim()) {
+        return false;
+    }
+    let aa: String = a.chars().take(160).collect::<String>().to_lowercase();
+    let bb: String = b.chars().take(160).collect::<String>().to_lowercase();
+    if aa == bb {
+        return false;
+    }
+    let ta = token_set(a);
+    let tb = token_set(b);
+    if ta.is_empty() || tb.is_empty() {
+        return true;
+    }
+    let inter = ta.intersection(&tb).count() as f64;
+    let union = ta.union(&tb).count() as f64;
+    let jaccard = if union > 0.0 { inter / union } else { 0.0 };
+    // High embed sim + modest lexical overlap ⇒ likely competing claims.
+    jaccard < 0.72
+}
+
+fn token_set(text: &str) -> std::collections::HashSet<String> {
+    text.split(|c: char| !c.is_alphanumeric())
+        .filter(|t| t.len() >= 2)
+        .map(|t| t.to_lowercase())
+        .collect()
+}
+
 fn chunk_text(title: &str, content: &str, max_chars: usize) -> Vec<String> {
     let max_chars = max_chars.max(256);
     if content.chars().count() <= max_chars {
@@ -218,7 +321,6 @@ fn chunk_text(title: &str, content: &str, max_chars: usize) -> Vec<String> {
             chunks.push(current);
             current = para.to_string();
         } else if candidate.chars().count() > max_chars {
-            // Hard split oversized paragraph.
             let mut buf = String::new();
             for ch in para.chars() {
                 buf.push(ch);

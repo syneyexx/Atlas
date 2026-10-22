@@ -251,7 +251,19 @@ score = α·vector + β·bm25 + γ·recency + δ·salience + ε·graph_prior
 - `outbox` + request-driven drain
 - APIs: `/v1/atlas/traces*`, `/v1/atlas/outbox`, `/v1/atlas/edges*`
 
-### Volgende: Milestone 2 (document-rag) of Milestone 1 polish
-1. Document store + chunker + hybrid ingest
-2. Procedural kind end-to-end + conflict/truth path
-3. Eval fixture suite gekoppeld aan `trace_id`
+### Milestone 1 — DONE
+- Procedural memory schrijfbaar + MoE head + residual frames
+- Conflict/truth: divergente claims → beide bewaren + `conflicts_with` edge
+- Config: `memory_conflict_sim_low`
+
+### Milestone 2 — DONE
+- `documents` + `document_chunks` + `documents_fts`
+- Content-addressed object storage (`data/objects/{hh}/{sha256}`)
+- Ingest pipeline → semantic memory nodes + `has_chunk` edges
+- APIs: `/v1/atlas/documents*` + search
+
+### Volgende: Milestone 3 (Agent OS)
+1. Tool registry + policy/capabilities
+2. Task/agent state + checkpoints
+3. Prompt/model registry versioning
+4. Daarna M4 eval-loop, M5 scale adapters

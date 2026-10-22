@@ -53,7 +53,9 @@ One-brain residual memory naast het LM.
 9. Working KV save (TTL refresh on read/write)  
 10. Optional auto-consolidate (settings)
 
-**Experts:** working · episodic · semantic · self_profile · (procedural later)
+**Experts:** working · episodic · semantic · self_profile · **procedural**
+
+**Conflict/truth (M1):** Write Governor detecteert divergente claims (sim ≥ conflict_low, < dedupe) → beide nodes + `conflicts_with` edge.
 
 **Working KV (M3):** per `conversation_id` — pins, recent hits, last router/query, embedding blob; expiry **on-read** only.  
 API: `GET /v1/atlas/memory/working/{conversation_id}`

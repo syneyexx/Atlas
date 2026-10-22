@@ -45,13 +45,17 @@ pub async fn learn(
             scope: Some("global".into()),
             confidence: Some(0.85),
             conversation_id: None,
+            parent_ids: Vec::new(),
         },
     )
     .await?;
 
     match decision.action {
         WriteAction::Discarded => Err(AtlasError::BadRequest(decision.reason)),
-        WriteAction::Inserted | WriteAction::Merged | WriteAction::Deduped => {
+        WriteAction::Inserted
+        | WriteAction::Merged
+        | WriteAction::Deduped
+        | WriteAction::Conflicted => {
             let node = decision.node.ok_or_else(|| {
                 AtlasError::BadRequest("write governor gaf geen node terug".into())
             })?;

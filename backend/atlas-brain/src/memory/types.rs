@@ -155,6 +155,9 @@ pub struct RouterDecision {
     pub episodic: f64,
     pub semantic: f64,
     pub self_profile: f64,
+    /// How-to / workflow / skill memories.
+    #[serde(default)]
+    pub procedural: f64,
 }
 
 impl Default for RouterDecision {
@@ -162,8 +165,9 @@ impl Default for RouterDecision {
         Self {
             working: 0.15,
             episodic: 0.25,
-            semantic: 0.45,
-            self_profile: 0.35,
+            semantic: 0.40,
+            self_profile: 0.30,
+            procedural: 0.25,
         }
     }
 }
@@ -194,6 +198,8 @@ pub struct LearnMemoryRequest {
     pub confidence: Option<f64>,
     #[serde(default)]
     pub conversation_id: Option<String>,
+    #[serde(default)]
+    pub parent_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -230,6 +236,8 @@ pub enum WriteAction {
     Inserted,
     Merged,
     Deduped,
+    /// Near-topic but divergent content — both kept, linked via conflicts_with.
+    Conflicted,
     Discarded,
 }
 

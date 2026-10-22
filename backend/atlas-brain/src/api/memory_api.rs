@@ -24,6 +24,7 @@ pub async fn learn(
     if decision.action == WriteAction::Discarded {
         return Err(AtlasError::BadRequest(decision.reason));
     }
+    // Conflicted / merged / inserted / deduped are all successful commits.
     Ok(Json(decision))
 }
 

@@ -1,6 +1,7 @@
 mod chat;
 mod config_api;
 mod conversations;
+mod documents;
 mod knowledge;
 mod memory_api;
 mod models;
@@ -51,4 +52,14 @@ pub fn router() -> Router<AppState> {
         )
         .route("/v1/atlas/edges", post(store_api::upsert_edge))
         .route("/v1/atlas/edges/{id}", get(store_api::list_edges))
+        // Document RAG (M2)
+        .route(
+            "/v1/atlas/documents",
+            get(documents::list).post(documents::ingest),
+        )
+        .route("/v1/atlas/documents/search", get(documents::search))
+        .route(
+            "/v1/atlas/documents/{id}",
+            get(documents::get).delete(documents::delete),
+        )
 }

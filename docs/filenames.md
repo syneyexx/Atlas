@@ -43,6 +43,7 @@
 | `backend/atlas-brain/src/api/conversations.rs` | conversation-memory | CRUD |
 | `backend/atlas-brain/src/api/models.rs` | local-lm-client | Models list |
 | `backend/atlas-brain/src/api/store_api.rs` | store-plane | traces / outbox / edges HTTP |
+| `backend/atlas-brain/src/api/documents.rs` | document-rag | document ingest / search / CRUD |
 | `backend/atlas-brain/src/lm/client.rs` | local-lm-client | LM HTTP/stub |
 | `backend/atlas-brain/src/brain/pipeline.rs` | neural-pipeline | Cortex → LM + durable trace |
 | `backend/atlas-brain/rust-toolchain.toml` | atlas-brain | Pin stable rustc |

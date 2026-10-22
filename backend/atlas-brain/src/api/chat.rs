@@ -128,6 +128,7 @@ pub async fn chat_completions(
                     scope: Some("conversation".into()),
                     confidence: Some(0.65),
                     conversation_id: Some(id.clone()),
+                    parent_ids: Vec::new(),
                 },
             )
             .await;
