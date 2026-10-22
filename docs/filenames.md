@@ -10,6 +10,7 @@
 | `README.md` | meta | Intro |
 | `docs/datanames.md` | docs | Architectuurkaart |
 | `docs/filenames.md` | docs | Deze index |
+| `docs/plan-stores-architecture.md` | store-plane | Wereldklasse stores-plan (28 logical / gefaseerde engines) |
 | `frontend/` | frontend | React UI |
 | `backend/atlas-brain/` | atlas-brain | Brain + Memory Cortex |
 
@@ -59,9 +60,11 @@
 | `backend/atlas-brain/src/memory/residual.rs` | memory-cortex | ContextStream + budget |
 | `backend/atlas-brain/src/memory/cortex.rs` | memory-cortex | Orchestrator hops/salience/KV |
 | `backend/atlas-brain/src/memory/decay.rs` | memory-cortex | On-read decay + bump/soften |
-| `backend/atlas-brain/src/store/db.rs` | store | SQLite open |
-| `backend/atlas-brain/src/store/memory.rs` | memory-cortex store | nodes, embeddings, working_memory, migrate |
-| `backend/atlas-brain/src/store/conversations.rs` | conversation-memory | Types |
+| `backend/atlas-brain/src/store/db.rs` | store / store-plane | SQLite open + store-plane migrations |
+| `backend/atlas-brain/src/store/memory.rs` | memory-cortex store | nodes, embeddings, working_memory, edges, migrate |
+| `backend/atlas-brain/src/store/conversations.rs` | conversation-memory | Types + normalized messages |
+| `backend/atlas-brain/src/store/traces.rs` | store-plane | Append-only audit traces |
+| `backend/atlas-brain/src/store/outbox.rs` | store-plane | Durable events (request-drain) |
 | `backend/atlas-brain/src/store/knowledge.rs` | knowledge-store | Legacy types |
 
 ## Runtime data (niet in git)
@@ -69,4 +72,4 @@
 | Pad | Rol |
 |-----|-----|
 | `…/data/brain-config.json` | Settings |
-| `…/data/atlas.db` | conversations, knowledge, memory_*, working_memory |
+| `…/data/atlas.db` | conversations, messages, knowledge, memory_*, working_memory, traces, outbox |

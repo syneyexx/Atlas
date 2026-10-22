@@ -35,7 +35,7 @@ Alles denkt via **Atlas Brain** (`backend/atlas-brain`). De React-UI is alleen h
 
 ### `conversation-memory`
 - **API:** `/v1/atlas/conversations*`
-- **Store:** SQLite `conversations`
+- **Store:** SQLite `conversations` + genormaliseerde `messages` (+ FTS)
 
 ### `memory-cortex` — Memory v2 (M0–M5)
 One-brain residual memory naast het LM.
@@ -68,7 +68,15 @@ Stub-LM: deterministische distill uit brontekst.
 - `GET/POST /v1/atlas/memory` · `POST …/recall` (`trace`) · `POST …/migrate`
 - `GET/POST …/profile` · `DELETE …/{id}` forget
 
-**Store:** `memory_nodes` · `memory_embeddings` · `working_memory`
+**Store:** `memory_nodes` · `memory_embeddings` · `working_memory` · `memory_edges` · FTS · `traces` · `outbox`
+
+### `store-plane` — Logische stores (plan → M0+)
+Wereldklasse stores-architectuur: **28 logische stores**, engines gefaseerd (SQLite → Postgres/Redis/S3).
+
+- **Plan:** `docs/plan-stores-architecture.md`
+- **Nu:** SQLite-first schema hardening (messages, FTS5, edges, embedding_model_id, traces, outbox)
+- **Niet nu:** Neo4j/Redis/Postgres tot schaal of multi-instance dat eist
+- **Outbox:** request-driven drain (volgende request of expliciete API) — geen sweeper
 
 ### `knowledge-store` — Compat
 `/v1/atlas/knowledge*` → Write Governor / Cortex.
@@ -79,11 +87,15 @@ Frames: SYSTEM_PROMPT → self → router? → semantic → episodic → working
 
 ---
 
-## Gereserveerd (later)
+## Gereserveerd (nog niet / later)
 
 | Naam | Intentie |
 |------|----------|
+| `document-rag` | Document store + FTS5 + vector hybrid |
+| `tool-registry` | Tool schemas, policy/capabilities, versioning |
+| `trace-eval-loop` | Traces → feedback → eval → training dataset |
 | `trading-engine` / workspaces / crawlers | Plugins |
+| `data-workspace` / `coding-workspace` | Later (+ code/AST index) |
 | `ethics-layer` / `security-layer` | Laatst |
 | `cnn-memory` / `rnn-episode` | Later |
 | `procedural` expert | Later |
