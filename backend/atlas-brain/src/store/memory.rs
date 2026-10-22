@@ -38,6 +38,13 @@ impl Store {
             );
             CREATE INDEX IF NOT EXISTS idx_memory_kind ON memory_nodes(kind);
             CREATE INDEX IF NOT EXISTS idx_memory_updated ON memory_nodes(updated_at);
+            CREATE TABLE IF NOT EXISTS working_memory (
+                conversation_id TEXT PRIMARY KEY,
+                state_json TEXT NOT NULL,
+                query_embedding BLOB,
+                updated_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL
+            );
             ",
         )?;
         Ok(())
@@ -220,6 +227,67 @@ impl Store {
             migrated += 1;
         }
         Ok(migrated)
+    }
+
+    pub fn get_working_memory(
+        &self,
+        conversation_id: &str,
+    ) -> AtlasResult<Option<crate::memory::working::WorkingMemoryState>> {
+        let conn = self.conn.lock().expect("store lock");
+        let mut stmt = conn.prepare(
+            "SELECT state_json FROM working_memory WHERE conversation_id = ?1",
+        )?;
+        let raw: Option<String> = stmt
+            .query_row(params![conversation_id], |row| row.get(0))
+            .optional()?;
+        match raw {
+            Some(json) => Ok(Some(serde_json::from_str(&json)?)),
+            None => Ok(None),
+        }
+    }
+
+    pub fn upsert_working_memory(
+        &self,
+        state: &crate::memory::working::WorkingMemoryState,
+        query_embedding: Option<&[u8]>,
+    ) -> AtlasResult<()> {
+        let conn = self.conn.lock().expect("store lock");
+        conn.execute(
+            "INSERT INTO working_memory (conversation_id, state_json, query_embedding, updated_at, expires_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(conversation_id) DO UPDATE SET
+               state_json=excluded.state_json,
+               query_embedding=COALESCE(excluded.query_embedding, working_memory.query_embedding),
+               updated_at=excluded.updated_at,
+               expires_at=excluded.expires_at",
+            params![
+                state.conversation_id,
+                serde_json::to_string(state)?,
+                query_embedding,
+                state.updated_at,
+                state.expires_at,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_working_embedding(&self, conversation_id: &str) -> AtlasResult<Option<Vec<u8>>> {
+        let conn = self.conn.lock().expect("store lock");
+        let mut stmt =
+            conn.prepare("SELECT query_embedding FROM working_memory WHERE conversation_id = ?1")?;
+        let blob: Option<Vec<u8>> = stmt
+            .query_row(params![conversation_id], |row| row.get(0))
+            .optional()?;
+        Ok(blob)
+    }
+
+    pub fn delete_working_memory(&self, conversation_id: &str) -> AtlasResult<bool> {
+        let conn = self.conn.lock().expect("store lock");
+        let n = conn.execute(
+            "DELETE FROM working_memory WHERE conversation_id = ?1",
+            params![conversation_id],
+        )?;
+        Ok(n > 0)
     }
 }
 

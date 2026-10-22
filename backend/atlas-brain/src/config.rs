@@ -35,6 +35,14 @@ pub struct BrainConfig {
     pub memory_min_hit_score: f64,
     pub memory_hops: usize,
     pub memory_include_router_brief: bool,
+    /// Working KV TTL (seconds). Expiry checked on read only.
+    pub working_ttl_secs: u64,
+    pub working_max_pins: usize,
+    /// Editable consolidate instruction (not a SYSTEM_PROMPT ethics layer).
+    pub consolidate_prompt: String,
+    pub memory_auto_consolidate: bool,
+    pub memory_auto_consolidate_min: usize,
+    pub memory_write_episodic_on_chat: bool,
 }
 
 impl Default for BrainConfig {
@@ -65,6 +73,12 @@ impl Default for BrainConfig {
             memory_min_hit_score: 0.04,
             memory_hops: 2,
             memory_include_router_brief: false,
+            working_ttl_secs: 3600,
+            working_max_pins: 8,
+            consolidate_prompt: String::new(),
+            memory_auto_consolidate: false,
+            memory_auto_consolidate_min: 3,
+            memory_write_episodic_on_chat: true,
         }
     }
 }
@@ -83,6 +97,9 @@ pub struct PublicSettings {
     pub embed_model: String,
     pub memory_token_budget: usize,
     pub memory_hops: usize,
+    pub working_ttl_secs: u64,
+    pub memory_auto_consolidate: bool,
+    pub consolidate_prompt: String,
 }
 
 impl From<&BrainConfig> for PublicSettings {
@@ -99,6 +116,9 @@ impl From<&BrainConfig> for PublicSettings {
             embed_model: c.embed_model.clone(),
             memory_token_budget: c.memory_token_budget,
             memory_hops: c.memory_hops,
+            working_ttl_secs: c.working_ttl_secs,
+            memory_auto_consolidate: c.memory_auto_consolidate,
+            consolidate_prompt: c.consolidate_prompt.clone(),
         }
     }
 }
@@ -116,6 +136,9 @@ pub struct PublicSettingsPatch {
     pub embed_model: Option<String>,
     pub memory_token_budget: Option<usize>,
     pub memory_hops: Option<usize>,
+    pub working_ttl_secs: Option<u64>,
+    pub memory_auto_consolidate: Option<bool>,
+    pub consolidate_prompt: Option<String>,
 }
 
 impl BrainConfig {
@@ -199,6 +222,15 @@ impl BrainConfig {
         }
         if let Some(v) = patch.memory_hops {
             self.memory_hops = v.clamp(1, 4);
+        }
+        if let Some(v) = patch.working_ttl_secs {
+            self.working_ttl_secs = v.max(60);
+        }
+        if let Some(v) = patch.memory_auto_consolidate {
+            self.memory_auto_consolidate = v;
+        }
+        if let Some(v) = patch.consolidate_prompt {
+            self.consolidate_prompt = v;
         }
         self.save()
     }

@@ -34,6 +34,11 @@ pub fn router() -> Router<AppState> {
         .route("/v1/atlas/memory", get(memory_api::list).post(memory_api::learn))
         .route("/v1/atlas/memory/recall", post(memory_api::recall))
         .route("/v1/atlas/memory/migrate", post(memory_api::migrate))
-        .route("/v1/atlas/memory/profile", get(memory_api::list_profile).post(memory_api::upsert_profile))
+        .route("/v1/atlas/memory/consolidate", post(memory_api::consolidate))
+        .route(
+            "/v1/atlas/memory/profile",
+            get(memory_api::list_profile).post(memory_api::upsert_profile),
+        )
+        .route("/v1/atlas/memory/working/{id}", get(memory_api::get_working))
         .route("/v1/atlas/memory/{id}", delete(memory_api::forget))
 }
