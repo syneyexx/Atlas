@@ -44,14 +44,21 @@ pub async fn chat_completions(
         cfg.model_id = model.clone();
     }
 
+    // Request-driven: mark vectors from other embed models stale (no sweeper).
+    let embed_key = crate::memory::write::embed_model_key(&cfg);
+    let _ = state.store.mark_embeddings_stale_except(&embed_key);
+
     let conversation: Vec<ChatMessage> = body
         .messages
         .into_iter()
         .map(|m| ChatMessage {
+            id: Some(Uuid::new_v4().to_string()),
             role: m.role,
             content: m.content,
             created_at: None,
             callout: None,
+            trace_id: None,
+            model_id: None,
         })
         .collect();
 
@@ -59,7 +66,7 @@ pub async fn chat_completions(
         .conversation_id
         .clone()
         .filter(|s| !s.is_empty());
-    let answer = run_completion(
+    let outcome = run_completion(
         &cfg,
         &state.store,
         &state.lm,
@@ -89,10 +96,13 @@ pub async fn chat_completions(
             });
         let mut messages = conversation.clone();
         messages.push(ChatMessage {
+            id: Some(Uuid::new_v4().to_string()),
             role: "assistant".into(),
-            content: answer.clone(),
+            content: outcome.answer.clone(),
             created_at: Some(Utc::now().to_rfc3339()),
             callout: None,
+            trace_id: outcome.trace_id.clone(),
+            model_id: Some(cfg.model_id.clone()),
         });
         state.store.upsert_conversation(&ConversationRecord {
             id: id.clone(),
@@ -142,14 +152,29 @@ pub async fn chat_completions(
         }
     }
 
+    // Request-driven outbox drain (no background sweeper).
+    let drain = state.store.drain_outbox(32).unwrap_or_else(|_| {
+        crate::store::DrainResult {
+            seen: 0,
+            processed: 0,
+            by_type: Default::default(),
+        }
+    });
+
     Ok(Json(json!({
         "id": format!("chatcmpl-{}", Uuid::new_v4()),
         "object": "chat.completion",
         "created": created,
         "model": cfg.model_id,
+        "atlas": {
+            "conversation_id": id,
+            "trace_id": outcome.trace_id,
+            "hit_ids": outcome.hit_ids,
+            "outbox_drained": drain.processed,
+        },
         "choices": [{
             "index": 0,
-            "message": { "role": "assistant", "content": answer },
+            "message": { "role": "assistant", "content": outcome.answer },
             "finish_reason": "stop"
         }]
     })))

@@ -4,6 +4,7 @@ mod conversations;
 mod knowledge;
 mod memory_api;
 mod models;
+mod store_api;
 
 use crate::state::AppState;
 use axum::routing::{delete, get, post};
@@ -41,4 +42,13 @@ pub fn router() -> Router<AppState> {
         )
         .route("/v1/atlas/memory/working/{id}", get(memory_api::get_working))
         .route("/v1/atlas/memory/{id}", delete(memory_api::forget))
+        // Store Plane M0
+        .route("/v1/atlas/traces", get(store_api::list_traces))
+        .route("/v1/atlas/traces/{id}", get(store_api::get_trace))
+        .route(
+            "/v1/atlas/outbox",
+            get(store_api::list_outbox).post(store_api::drain_outbox),
+        )
+        .route("/v1/atlas/edges", post(store_api::upsert_edge))
+        .route("/v1/atlas/edges/{id}", get(store_api::list_edges))
 }

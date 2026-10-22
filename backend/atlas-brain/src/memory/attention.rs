@@ -23,6 +23,11 @@ pub async fn multi_head_recall(
     let nodes = store.list_memory_nodes(None)?;
     let query_vec = embed.embed(cfg, query).await?;
     let query_lex = tokenize(query);
+    // Hybrid: FTS5 BM25 ranks feed the lexical head (and lightly boost others).
+    let fts_ranks: HashMap<String, f64> = store
+        .search_memory_fts(query, top_k.saturating_mul(4).max(16))?
+        .into_iter()
+        .collect();
 
     let mut heads = Vec::new();
     heads.push(run_head(
@@ -33,6 +38,7 @@ pub async fn multi_head_recall(
         cfg,
         &query_vec,
         &query_lex,
+        &fts_ranks,
         conversation_id,
         now,
         |n| n.kind == MemoryKind::Semantic,
@@ -46,6 +52,7 @@ pub async fn multi_head_recall(
         cfg,
         &query_vec,
         &query_lex,
+        &fts_ranks,
         conversation_id,
         now,
         |n| n.kind == MemoryKind::Episodic,
@@ -59,6 +66,7 @@ pub async fn multi_head_recall(
         cfg,
         &query_vec,
         &query_lex,
+        &fts_ranks,
         conversation_id,
         now,
         |n| n.kind == MemoryKind::SelfProfile,
@@ -72,6 +80,7 @@ pub async fn multi_head_recall(
         cfg,
         &query_vec,
         &query_lex,
+        &fts_ranks,
         conversation_id,
         now,
         |_| true,
@@ -85,6 +94,7 @@ pub async fn multi_head_recall(
         cfg,
         &query_vec,
         &query_lex,
+        &fts_ranks,
         conversation_id,
         now,
         |n| n.kind == MemoryKind::Episodic || n.kind == MemoryKind::Working,
@@ -101,12 +111,15 @@ fn run_head(
     cfg: &BrainConfig,
     query_vec: &[f32],
     query_lex: &HashMap<String, f64>,
+    fts_ranks: &HashMap<String, f64>,
     conversation_id: Option<&str>,
     now: chrono::DateTime<Utc>,
     filter: impl Fn(&MemoryNode) -> bool,
     top_k: usize,
 ) -> AtlasResult<AttentionHeadResult> {
     let mut scored: Vec<MemoryHit> = Vec::new();
+    // Normalize FTS ranks to 0..1 for mixing.
+    let fts_max = fts_ranks.values().cloned().fold(0.0_f64, f64::max).max(1e-6);
     for node in nodes.iter().filter(|n| filter(n)) {
         if should_skip(node, cfg, now) {
             continue;
@@ -118,8 +131,13 @@ fn run_head(
             }
         }
         let sal = effective_salience(node, cfg, now);
+        let fts = fts_ranks.get(&node.id).copied().unwrap_or(0.0) / fts_max;
         let mut score = match name {
-            "lexical" => lexical_score(node, query_lex) * head_weight * sal,
+            "lexical" => {
+                // Hybrid lexical: in-memory TF + FTS5 BM25.
+                let lex = lexical_score(node, query_lex);
+                (0.45 * lex + 0.55 * fts) * head_weight * sal
+            }
             "recency" => {
                 let vec_score = store
                     .get_embedding(&node.id)?
@@ -141,7 +159,8 @@ fn run_head(
                     .map(|v| cosine(query_vec, &v))
                     .unwrap_or(0.0);
                 let lex = lexical_score(node, query_lex);
-                (0.78 * vec_score + 0.22 * lex) * head_weight * sal
+                // α·vector + β·bm25/lex (store-plane hybrid)
+                (0.70 * vec_score + 0.18 * lex + 0.12 * fts) * head_weight * sal
             }
         };
         if conversation_id.is_some()

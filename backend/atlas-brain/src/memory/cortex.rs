@@ -48,13 +48,27 @@ pub async fn recall_into_context(
 
     if cfg.memory_hops > 1 {
         let fused_tmp = fuse_hits(&heads, top_k);
-        let expand = fused_tmp
+        let mut expand_parts: Vec<String> = fused_tmp
             .iter()
             .take(2)
-            .map(|h| h.title.as_str())
+            .map(|h| h.title.clone())
             .filter(|t| !t.is_empty())
-            .collect::<Vec<_>>()
-            .join(" ");
+            .collect();
+        // Store-plane graph hop: follow memory_edges from top hits.
+        for hit in fused_tmp.iter().take(3) {
+            if hit.id.starts_with("working-") {
+                continue;
+            }
+            for nid in store.neighbor_ids(&hit.id, 4)? {
+                if let Some(n) = store.get_memory_node(&nid)? {
+                    if !n.title.is_empty() {
+                        expand_parts.push(n.title);
+                    }
+                }
+            }
+        }
+        expand_parts.truncate(6);
+        let expand = expand_parts.join(" ");
         if !expand.is_empty() {
             let q2 = format!("{query}\n{expand}");
             let heads2 =

@@ -130,7 +130,14 @@ async fn commit_one(
                 merged.provenance.confidence =
                     ((node.provenance.confidence + confidence) / 2.0).clamp(0.05, 1.0);
                 store.upsert_memory_node(&merged)?;
-                store.upsert_embedding(&merged.id, &vector)?;
+                store.upsert_embedding(&merged.id, &vector, &embed_model_key(cfg))?;
+                let _ = store.enqueue_outbox(
+                    "memory.merged",
+                    &serde_json::json!({
+                        "node_id": merged.id,
+                        "kind": merged.kind.as_str(),
+                    }),
+                );
                 return Ok(WriteDecision {
                     action: WriteAction::Merged,
                     node: Some(merged),
@@ -161,18 +168,37 @@ async fn commit_one(
         updated_at: now,
     };
     store.upsert_memory_node(&node)?;
-    store.upsert_embedding(&node.id, &vector)?;
+    store.upsert_embedding(&node.id, &vector, &embed_model_key(cfg))?;
 
     // Compat mirror into legacy knowledge table for semantic learns.
     if kind == MemoryKind::Semantic {
         let _ = store.mirror_knowledge_from_memory(&node);
     }
 
+    let _ = store.enqueue_outbox(
+        "memory.inserted",
+        &serde_json::json!({
+            "node_id": node.id,
+            "kind": node.kind.as_str(),
+            "conversation_id": node.provenance.conversation_id,
+            "embedding_model_id": embed_model_key(cfg),
+        }),
+    );
+
     Ok(WriteDecision {
         action: WriteAction::Inserted,
         node: Some(node),
         reason: "committed via write governor".into(),
     })
+}
+
+pub fn embed_model_key(cfg: &BrainConfig) -> String {
+    let model = if cfg.embed_model.trim().is_empty() {
+        "default"
+    } else {
+        cfg.embed_model.trim()
+    };
+    format!("{}:{model}", cfg.embed_provider)
 }
 
 fn chunk_text(title: &str, content: &str, max_chars: usize) -> Vec<String> {

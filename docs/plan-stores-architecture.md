@@ -241,12 +241,17 @@ score = α·vector + β·bm25 + γ·recency + δ·salience + ε·graph_prior
 
 ---
 
-## 13. Volgende implementatiestap (na goedkeuring plan)
+## 13. Implementatiestatus
 
-Niet alles tegelijk. Eerste PR na dit plan:
+### Milestone 0 — DONE
+- Genormaliseerde `messages` + FTS5 (`messages_fts`, `memory_fts`)
+- `memory_edges` + hop-2 neighbor expand
+- `embedding_model_id` + `stale` mark on model change
+- Append-only `traces` (chat + recall)
+- `outbox` + request-driven drain
+- APIs: `/v1/atlas/traces*`, `/v1/atlas/outbox`, `/v1/atlas/edges*`
 
-1. Milestone 0 schema in `atlas-brain` (messages normaliseren, traces, edges, embedding_model_id, outbox).
-2. Docs `datanames.md` / `filenames.md` bijwerken met Store Plane namen.
-3. Eén eval fixture + `/v1/atlas/memory/recall` trace assert.
-
-Daarna pas documents/hybrid en tool registry.
+### Volgende: Milestone 2 (document-rag) of Milestone 1 polish
+1. Document store + chunker + hybrid ingest
+2. Procedural kind end-to-end + conflict/truth path
+3. Eval fixture suite gekoppeld aan `trace_id`

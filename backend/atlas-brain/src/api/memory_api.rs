@@ -44,13 +44,26 @@ pub async fn recall(
     )
     .await?;
     let top = body.top_k.unwrap_or(cfg.knowledge_top_k);
+    let hits: Vec<_> = recalled.hits.into_iter().take(top).collect();
+    let trace = if want_trace {
+        let payload = serde_json::json!({
+            "query": body.query,
+            "hit_ids": hits.iter().map(|h| h.id.clone()).collect::<Vec<_>>(),
+            "recall": &recalled.emit.trace,
+        });
+        let _ = state.store.insert_trace(
+            "recall",
+            body.conversation_id.as_deref(),
+            None,
+            &payload,
+        );
+        Some(recalled.emit.trace)
+    } else {
+        None
+    };
     Ok(Json(RecallMemoryResponse {
-        hits: recalled.hits.into_iter().take(top).collect(),
-        trace: if want_trace {
-            Some(recalled.emit.trace)
-        } else {
-            None
-        },
+        hits,
+        trace,
     }))
 }
 
@@ -83,7 +96,11 @@ pub async fn migrate(State(state): State<AppState>) -> AtlasResult<Json<serde_js
             .embed
             .embed(&cfg, &format!("{}\n{}", node.title, node.content))
             .await?;
-        state.store.upsert_embedding(&node.id, &vector)?;
+        state.store.upsert_embedding(
+            &node.id,
+            &vector,
+            &crate::memory::write::embed_model_key(&cfg),
+        )?;
         embedded += 1;
     }
     Ok(Json(serde_json::json!({
@@ -150,7 +167,11 @@ pub async fn upsert_profile(
         .embed(&cfg, &format!("{}\n{}", node.title, node.content))
         .await?;
     state.store.upsert_memory_node(&node)?;
-    state.store.upsert_embedding(&node.id, &vector)?;
+    state.store.upsert_embedding(
+        &node.id,
+        &vector,
+        &crate::memory::write::embed_model_key(&cfg),
+    )?;
     let _ = &mut node;
     Ok(Json(node))
 }

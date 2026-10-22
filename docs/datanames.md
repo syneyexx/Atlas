@@ -35,7 +35,8 @@ Alles denkt via **Atlas Brain** (`backend/atlas-brain`). De React-UI is alleen h
 
 ### `conversation-memory`
 - **API:** `/v1/atlas/conversations*`
-- **Store:** SQLite `conversations` + genormaliseerde `messages` (+ FTS)
+- **Store:** SQLite `conversations` + genormaliseerde `messages` (+ `messages_fts`)
+- **Bron van waarheid:** `messages` rijen; `messages_json` is denormalized mirror
 
 ### `memory-cortex` — Memory v2 (M0–M5)
 One-brain residual memory naast het LM.
@@ -70,13 +71,16 @@ Stub-LM: deterministische distill uit brontekst.
 
 **Store:** `memory_nodes` · `memory_embeddings` · `working_memory` · `memory_edges` · FTS · `traces` · `outbox`
 
-### `store-plane` — Logische stores (plan → M0+)
+### `store-plane` — Logische stores (plan → M0 done)
 Wereldklasse stores-architectuur: **28 logische stores**, engines gefaseerd (SQLite → Postgres/Redis/S3).
 
 - **Plan:** `docs/plan-stores-architecture.md`
-- **Nu:** SQLite-first schema hardening (messages, FTS5, edges, embedding_model_id, traces, outbox)
+- **M0 (shipped):** genormaliseerde `messages` · FTS5 (`messages_fts`, `memory_fts`) · `memory_edges` · `embedding_model_id`+`stale` · `traces` · `outbox`
+- **API:** `GET /v1/atlas/traces*` · `GET|POST /v1/atlas/outbox` · `GET|POST /v1/atlas/edges*`
+- **Hybrid recall:** α·vector + β·lex + γ·BM25; hop-2 volgt edge-neighbors
+- **Chat:** response `atlas.trace_id` / `hit_ids` / `outbox_drained`; assistant message krijgt `trace_id`
 - **Niet nu:** Neo4j/Redis/Postgres tot schaal of multi-instance dat eist
-- **Outbox:** request-driven drain (volgende request of expliciete API) — geen sweeper
+- **Outbox:** drain on chat (+ expliciete POST) — geen sweeper
 
 ### `knowledge-store` — Compat
 `/v1/atlas/knowledge*` → Write Governor / Cortex.

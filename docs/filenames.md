@@ -42,8 +42,10 @@
 | `backend/atlas-brain/src/api/config_api.rs` | config-plane | Settings HTTP |
 | `backend/atlas-brain/src/api/conversations.rs` | conversation-memory | CRUD |
 | `backend/atlas-brain/src/api/models.rs` | local-lm-client | Models list |
+| `backend/atlas-brain/src/api/store_api.rs` | store-plane | traces / outbox / edges HTTP |
 | `backend/atlas-brain/src/lm/client.rs` | local-lm-client | LM HTTP/stub |
-| `backend/atlas-brain/src/brain/pipeline.rs` | neural-pipeline | Cortex → LM |
+| `backend/atlas-brain/src/brain/pipeline.rs` | neural-pipeline | Cortex → LM + durable trace |
+| `backend/atlas-brain/rust-toolchain.toml` | atlas-brain | Pin stable rustc |
 
 ## Backend — Memory Cortex
 
@@ -60,9 +62,11 @@
 | `backend/atlas-brain/src/memory/residual.rs` | memory-cortex | ContextStream + budget |
 | `backend/atlas-brain/src/memory/cortex.rs` | memory-cortex | Orchestrator hops/salience/KV |
 | `backend/atlas-brain/src/memory/decay.rs` | memory-cortex | On-read decay + bump/soften |
-| `backend/atlas-brain/src/store/db.rs` | store / store-plane | SQLite open + store-plane migrations |
-| `backend/atlas-brain/src/store/memory.rs` | memory-cortex store | nodes, embeddings, working_memory, edges, migrate |
-| `backend/atlas-brain/src/store/conversations.rs` | conversation-memory | Types + normalized messages |
+| `backend/atlas-brain/src/store/db.rs` | store / store-plane | SQLite open + migrations |
+| `backend/atlas-brain/src/store/plane.rs` | store-plane | M0 schema: messages/FTS/edges/traces/outbox |
+| `backend/atlas-brain/src/store/memory.rs` | memory-cortex store | nodes, embeddings+model_id, FTS, working_memory |
+| `backend/atlas-brain/src/store/conversations.rs` | conversation-memory | Types + normalized messages + FTS |
+| `backend/atlas-brain/src/store/edges.rs` | store-plane | memory_edges CRUD |
 | `backend/atlas-brain/src/store/traces.rs` | store-plane | Append-only audit traces |
 | `backend/atlas-brain/src/store/outbox.rs` | store-plane | Durable events (request-drain) |
 | `backend/atlas-brain/src/store/knowledge.rs` | knowledge-store | Legacy types |

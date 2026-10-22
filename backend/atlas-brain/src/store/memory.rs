@@ -3,6 +3,7 @@ use crate::memory::embed::{decode_vector, encode_vector};
 use crate::memory::types::{
     MemoryKind, MemoryNode, MemoryScope, MemorySource, Provenance,
 };
+use crate::store::conversations::sanitize_fts_query;
 use crate::store::KnowledgeNode;
 use rusqlite::{params, OptionalExtension};
 
@@ -51,45 +52,82 @@ impl Store {
     }
 
     pub fn upsert_memory_node(&self, node: &MemoryNode) -> AtlasResult<()> {
-        let conn = self.conn.lock().expect("store lock");
-        conn.execute(
-            "INSERT INTO memory_nodes (
-                id, kind, title, content, tags_json, source, created_at, parent_ids_json,
-                confidence, scope, conversation_id, salience, decay, archived_at, updated_at
-             ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)
-             ON CONFLICT(id) DO UPDATE SET
-                kind=excluded.kind,
-                title=excluded.title,
-                content=excluded.content,
-                tags_json=excluded.tags_json,
-                source=excluded.source,
-                created_at=excluded.created_at,
-                parent_ids_json=excluded.parent_ids_json,
-                confidence=excluded.confidence,
-                scope=excluded.scope,
-                conversation_id=excluded.conversation_id,
-                salience=excluded.salience,
-                decay=excluded.decay,
-                archived_at=excluded.archived_at,
-                updated_at=excluded.updated_at",
-            params![
-                node.id,
-                node.kind.as_str(),
-                node.title,
-                node.content,
-                serde_json::to_string(&node.tags)?,
-                node.provenance.source.as_str(),
-                node.provenance.created_at,
-                serde_json::to_string(&node.provenance.parent_ids)?,
-                node.provenance.confidence,
-                node.provenance.scope.as_str(),
-                node.provenance.conversation_id,
-                node.salience,
-                node.decay,
-                node.archived_at,
-                node.updated_at,
-            ],
-        )?;
+        let tags_json = serde_json::to_string(&node.tags)?;
+        let parents_json = serde_json::to_string(&node.provenance.parent_ids)?;
+        let tags_joined = node.tags.join(" ");
+        {
+            let conn = self.conn.lock().expect("store lock");
+            conn.execute(
+                "INSERT INTO memory_nodes (
+                    id, kind, title, content, tags_json, source, created_at, parent_ids_json,
+                    confidence, scope, conversation_id, salience, decay, archived_at, updated_at
+                 ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)
+                 ON CONFLICT(id) DO UPDATE SET
+                    kind=excluded.kind,
+                    title=excluded.title,
+                    content=excluded.content,
+                    tags_json=excluded.tags_json,
+                    source=excluded.source,
+                    created_at=excluded.created_at,
+                    parent_ids_json=excluded.parent_ids_json,
+                    confidence=excluded.confidence,
+                    scope=excluded.scope,
+                    conversation_id=excluded.conversation_id,
+                    salience=excluded.salience,
+                    decay=excluded.decay,
+                    archived_at=excluded.archived_at,
+                    updated_at=excluded.updated_at",
+                params![
+                    node.id,
+                    node.kind.as_str(),
+                    node.title,
+                    node.content,
+                    tags_json,
+                    node.provenance.source.as_str(),
+                    node.provenance.created_at,
+                    parents_json,
+                    node.provenance.confidence,
+                    node.provenance.scope.as_str(),
+                    node.provenance.conversation_id,
+                    node.salience,
+                    node.decay,
+                    node.archived_at,
+                    node.updated_at,
+                ],
+            )?;
+            // Rebuild FTS row for this node.
+            let _ = conn.execute(
+                "DELETE FROM memory_fts WHERE node_id = ?1",
+                params![node.id],
+            );
+            conn.execute(
+                "INSERT INTO memory_fts (node_id, kind, title, content, tags)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    node.id,
+                    node.kind.as_str(),
+                    node.title,
+                    node.content,
+                    tags_joined
+                ],
+            )?;
+        }
+        // Materialize parent_ids as graph edges (light knowledge graph).
+        for parent in &node.provenance.parent_ids {
+            if parent.is_empty() || parent == &node.id {
+                continue;
+            }
+            let _ = self.upsert_edge(
+                parent,
+                "parent_of",
+                &node.id,
+                1.0,
+                &serde_json::json!({
+                    "source": "provenance.parent_ids",
+                    "child_kind": node.kind.as_str(),
+                }),
+            );
+        }
         Ok(())
     }
 
@@ -144,33 +182,107 @@ impl Store {
 
     pub fn delete_memory_node(&self, id: &str) -> AtlasResult<bool> {
         let conn = self.conn.lock().expect("store lock");
+        let _ = conn.execute("DELETE FROM memory_fts WHERE node_id = ?1", params![id]);
         let _ = conn.execute("DELETE FROM memory_embeddings WHERE node_id = ?1", params![id]);
+        let _ = conn.execute(
+            "DELETE FROM memory_edges WHERE src_id = ?1 OR dst_id = ?1",
+            params![id],
+        );
         let n = conn.execute("DELETE FROM memory_nodes WHERE id = ?1", params![id])?;
         Ok(n > 0)
     }
 
-    pub fn upsert_embedding(&self, node_id: &str, vector: &[f32]) -> AtlasResult<()> {
+    pub fn upsert_embedding(
+        &self,
+        node_id: &str,
+        vector: &[f32],
+        embedding_model_id: &str,
+    ) -> AtlasResult<()> {
         let conn = self.conn.lock().expect("store lock");
         conn.execute(
-            "INSERT INTO memory_embeddings (node_id, dim, vector_json)
-             VALUES (?1, ?2, ?3)
-             ON CONFLICT(node_id) DO UPDATE SET dim=excluded.dim, vector_json=excluded.vector_json",
-            params![node_id, vector.len() as i64, encode_vector(vector)?],
+            "INSERT INTO memory_embeddings (node_id, dim, vector_json, embedding_model_id, stale)
+             VALUES (?1, ?2, ?3, ?4, 0)
+             ON CONFLICT(node_id) DO UPDATE SET
+               dim=excluded.dim,
+               vector_json=excluded.vector_json,
+               embedding_model_id=excluded.embedding_model_id,
+               stale=0",
+            params![
+                node_id,
+                vector.len() as i64,
+                encode_vector(vector)?,
+                embedding_model_id
+            ],
         )?;
         Ok(())
     }
 
     pub fn get_embedding(&self, node_id: &str) -> AtlasResult<Option<Vec<f32>>> {
         let conn = self.conn.lock().expect("store lock");
-        let mut stmt =
-            conn.prepare("SELECT vector_json FROM memory_embeddings WHERE node_id = ?1")?;
-        let blob: Option<Vec<u8>> = stmt
-            .query_row(params![node_id], |row| row.get(0))
+        let mut stmt = conn.prepare(
+            "SELECT vector_json, COALESCE(stale, 0) FROM memory_embeddings WHERE node_id = ?1",
+        )?;
+        let row: Option<(Vec<u8>, i64)> = stmt
+            .query_row(params![node_id], |row| Ok((row.get(0)?, row.get(1)?)))
             .optional()?;
-        match blob {
-            Some(bytes) => Ok(Some(decode_vector(&bytes)?)),
+        match row {
+            Some((bytes, stale)) if stale == 0 => Ok(Some(decode_vector(&bytes)?)),
+            Some(_) => Ok(None), // stale embedding → treat as missing (re-embed on write)
             None => Ok(None),
         }
+    }
+
+    #[allow(dead_code)]
+    pub fn get_embedding_model_id(&self, node_id: &str) -> AtlasResult<Option<String>> {
+        let conn = self.conn.lock().expect("store lock");
+        let mut stmt = conn.prepare(
+            "SELECT embedding_model_id FROM memory_embeddings WHERE node_id = ?1",
+        )?;
+        let id: Option<Option<String>> = stmt
+            .query_row(params![node_id], |row| row.get(0))
+            .optional()?;
+        Ok(id.flatten())
+    }
+
+    /// Mark all embeddings for a different model as stale (request-driven reindex later).
+    pub fn mark_embeddings_stale_except(&self, current_model: &str) -> AtlasResult<usize> {
+        let conn = self.conn.lock().expect("store lock");
+        let n = conn.execute(
+            "UPDATE memory_embeddings SET stale = 1
+             WHERE COALESCE(embedding_model_id, '') != ?1",
+            params![current_model],
+        )?;
+        Ok(n)
+    }
+
+    /// BM25/FTS memory search — returns (node_id, rank) with higher = better.
+    pub fn search_memory_fts(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> AtlasResult<Vec<(String, f64)>> {
+        let q = sanitize_fts_query(query);
+        if q.is_empty() {
+            return Ok(Vec::new());
+        }
+        let conn = self.conn.lock().expect("store lock");
+        let limit = limit.clamp(1, 100) as i64;
+        let mut stmt = conn.prepare(
+            "SELECT node_id, bm25(memory_fts) FROM memory_fts
+             WHERE memory_fts MATCH ?1
+             ORDER BY bm25(memory_fts) LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![q, limit], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                (-row.get::<_, f64>(1)?).max(0.0),
+            ))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row?);
+        }
+        Ok(out)
     }
 
     pub fn mirror_knowledge_from_memory(&self, node: &MemoryNode) -> AtlasResult<()> {
