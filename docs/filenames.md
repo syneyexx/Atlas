@@ -12,7 +12,9 @@
 | `docs/datanames.md` | docs | Architectuurkaart |
 | `docs/filenames.md` | docs | Deze index |
 | `docs/plan-stores-architecture.md` | store-plane | Wereldklasse stores-plan (28 logical / gefaseerde engines) |
-| `docs/engines.md` | scale-adapters | M5 engine config (Postgres/Redis/S3) |
+| `docs/plan-datasets-architecture.md` | datasets-plane | Datasets plane plan (D0–D9; Hub→recipe→mix) |
+| `Dataset-update.zip` | datasets-plane (UI-bron) | Frontend datasets-pagina archief |
+| `docs/engines.md` | scale-adapters | M5 engine config (Postgres/Redis/S3); datasets engine-notities |
 | `docker-compose.yml` | scale-adapters | Postgres + Redis + MinIO |
 | `frontend/` | frontend | React UI |
 | `backend/atlas-brain/` | atlas-brain | Brain + Memory Cortex |
@@ -22,18 +24,22 @@
 | Bestand | Architectuur | Rol |
 |---------|--------------|-----|
 | `frontend/src/main.tsx` | frontend | Entry |
-| `frontend/src/components/AtlasWorkspace.tsx` | frontend | Shell / settings / composer / Research mount |
+| `frontend/src/components/AtlasWorkspace.tsx` | frontend | Shell / settings / Research + Datasets mount |
 | `frontend/src/components/ResearchWorkspace.tsx` | frontend / research-plane | Research UI (command, phases, terminal) |
+| `frontend/src/components/datasets/DatasetsWorkspace.tsx` | frontend / datasets-plane | Bibliotheek + importconsole |
 | `frontend/src/components/ChatThread.tsx` | frontend | Bubbels |
 | `frontend/src/components/AtlasMark.tsx` | frontend | Merk |
 | `frontend/src/lib/runtime.ts` | frontend ↔ brain | Completions adapter |
 | `frontend/src/lib/brain.ts` | frontend ↔ control-plane | Settings / knowledge client |
 | `frontend/src/lib/research.ts` | frontend ↔ research-plane | Types + research API client |
+| `frontend/src/lib/datasets.ts` | frontend ↔ datasets-plane | Types + datasets API client |
 | `frontend/src/lib/id.ts` | frontend | UUID helper (HTTP-preview safe) |
 | `frontend/src/lib/conversations.ts` | frontend | Voorbeeld + guards |
 | `frontend/public/assets/atlas.css` | frontend | Basis |
 | `frontend/public/assets/chat.css` | frontend | Chat + settings |
 | `frontend/public/assets/research.css` | frontend | Research layout / terminal |
+| `frontend/public/assets/datasets.css` | frontend | Datasets layout / console |
+| `frontend/public/assets/datasets-design-specification.png` | frontend | Datasets design spec |
 
 ## Backend — core / API
 
@@ -104,3 +110,15 @@
 | `…/data/brain-config.json` | Settings (incl. research_* budgets) |
 | `…/data/atlas.db` | conversations, messages, knowledge, memory_*, documents, traces, outbox, research_* |
 | `…/data/objects/` | Content-addressed blobs (sha256) — ook research source fragments / reports |
+| `…/data/datasets/` | JSONL shards + manifests per pinned dataset (D1+) |
+
+## Backend — datasets-plane (D0–D7)
+
+| Bestand | Architectuur | Rol |
+|---------|--------------|-----|
+| `backend/atlas-brain/src/api/datasets_api.rs` | datasets-plane | HTTP `/v1/atlas/datasets*` |
+| `backend/atlas-brain/src/brain/datasets/mod.rs` | datasets-plane | Plane root |
+| `backend/atlas-brain/src/brain/datasets/hub.rs` | datasets-plane | Stub catalog + acquire + pin |
+| `backend/atlas-brain/src/brain/datasets/engine.rs` | datasets-plane | Recipe propose/verify, pipeline steps, mix/datamap |
+| `backend/atlas-brain/src/brain/datasets/orchestrator.rs` | datasets-plane | Job ticks, human gate, costs/artifacts |
+| `backend/atlas-brain/src/store/datasets.rs` | datasets-plane | Schema + CRUD (catalog→mixes) |

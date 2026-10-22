@@ -79,6 +79,14 @@ pub struct BrainConfig {
     pub research_max_sources: usize,
     /// Max request-driven ticks per job (budget guard).
     pub research_max_ticks: usize,
+
+    // --- Datasets plane ---
+    /// `stub` (offline fixtures) | `http` (optional hub search) | `hf` (reserved)
+    pub datasets_hub_provider: String,
+    pub datasets_hub_url: String,
+    pub datasets_max_ticks: usize,
+    pub datasets_disk_budget_bytes: u64,
+    pub datasets_max_cost_usd: f64,
 }
 
 impl Default for BrainConfig {
@@ -135,6 +143,11 @@ impl Default for BrainConfig {
             research_max_rounds: 2,
             research_max_sources: 10,
             research_max_ticks: 32,
+            datasets_hub_provider: "stub".into(),
+            datasets_hub_url: String::new(),
+            datasets_max_ticks: 32,
+            datasets_disk_budget_bytes: 50_000_000_000,
+            datasets_max_cost_usd: 25.0,
         }
     }
 }

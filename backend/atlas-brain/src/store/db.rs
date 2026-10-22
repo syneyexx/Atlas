@@ -50,8 +50,10 @@ impl Store {
         store.migrate_eval_schema()?;
         store.migrate_platform_schema()?;
         store.migrate_research_schema()?;
+        store.migrate_datasets_schema()?;
         let _ = store.migrate_messages_from_blobs()?;
         let _ = store.seed_builtin_tools()?;
+        let _ = store.seed_default_eval_guards()?;
         tracing::info!(engines = %store.engines.status_json(), "store plane engines");
         Ok(store)
     }

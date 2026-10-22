@@ -48,3 +48,19 @@ Status: `GET /v1/atlas/engines`
 
 Redis: working KV + semantic cache (TTL = `semantic_cache_ttl_secs`).  
 S3: content-addressed objects met filesystem mirror voor read-after-write.
+
+## Datasets plane (D0–D7 shipped)
+
+Zie `docs/plan-datasets-architecture.md`. **Geen nieuwe default-engines in D0–D7.**
+
+| Domein | Default (nu) | Later (D-C/D-D / D9) |
+|--------|--------------|----------------------|
+| Dataset metadata / jobs / recipes | SQLite (zelfde brain DB); Postgres DDL aanwezig voor datasets/jobs/recipes/edges | Dual-write mirrors (nog niet) |
+| Bulk records / shards | JSONL onder `data/datasets/` (+ object hashes) | Parquet crate · S3/MinIO |
+| Record search | FTS5 `dataset_records_fts` | Dedicated vector ANN |
+| Graph | `dataset_edges` SQL | AGE/Neo4j alleen D9 |
+| Compute | In-process streaming via job ticks | Ray adapter alleen D9 |
+
+Config: `datasets_hub_provider` (`stub`\|`http`) · `datasets_max_ticks` · `datasets_disk_budget_bytes` · `datasets_max_cost_usd`.
+
+Orchestratie: request-driven (`POST …/datasets/jobs/{id}/tick`) — geen Dagster/Prefect/worker-daemon.

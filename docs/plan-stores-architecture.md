@@ -55,6 +55,8 @@ Optioneel later (niet in MVP): multi-device sync log, feature-flag experiments, 
 
 **Totaal logisch: 28 stores, nog steeds 1–4 engines.**
 
+> **Datasets-uitbreiding (plan):** stores 29–39 (catalog, revisions, shards, records, recipes, jobs, enrichment cache, dataset_edges, eval-guards, mixes) — zie `docs/plan-datasets-architecture.md`. Zelfde engine-filosofie; geen parallelle stack.
+
 ---
 
 ## 4. Kritische verbeteringen op jouw 20
@@ -237,6 +239,7 @@ score = α·vector + β·bm25 + γ·recency + δ·salience + ε·graph_prior
 | Objects | `data/objects/` content-addressed |
 | Secrets | Apart encrypted; nooit in traces |
 | Verbeterlus | Trace → feedback → eval → dataset |
+| Datasets plane | Apart plan: `docs/plan-datasets-architecture.md` (D0–D9); hergebruikt objects/tasks/evals/costs/secrets |
 | Migratiepad | Store traits; Postgres later |
 
 ---
@@ -273,6 +276,7 @@ score = α·vector + β·bm25 + γ·recency + δ·salience + ε·graph_prior
 - Feedback store; corrections → training_examples
 - Semantic cache (opt-in `semantic_cache_enabled`, invalidate on settings change)
 - APIs: `/v1/atlas/evals/*`, `/feedback`, `/training`, `/cache`
+- **Note:** volledige trainingsmix / Hub-datasets = Datasets plane D0–D7 shipped (`docs/plan-datasets-architecture.md`)
 
 ### Milestone 5 — DONE
 - EngineBundle: `sqlite` | `dual` | `postgres` + env (`ATLAS_*`)

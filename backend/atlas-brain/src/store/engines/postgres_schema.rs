@@ -318,6 +318,63 @@ CREATE TABLE IF NOT EXISTS code_symbols (
 );
 CREATE INDEX IF NOT EXISTS idx_pg_code_symbols_name ON code_symbols(name);
 
+-- Datasets plane (metadata; bulk Parquet/JSONL blijft object/filesystem)
+CREATE TABLE IF NOT EXISTS datasets (
+    id TEXT PRIMARY KEY,
+    source TEXT NOT NULL,
+    hub_id TEXT NOT NULL,
+    revision TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    license TEXT NOT NULL DEFAULT '',
+    modality TEXT NOT NULL DEFAULT 'text',
+    gated BOOLEAN NOT NULL DEFAULT FALSE,
+    root_hash TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'draft',
+    project_id TEXT,
+    meta_json JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    UNIQUE(source, hub_id, revision)
+);
+CREATE TABLE IF NOT EXISTS dataset_jobs (
+    id TEXT PRIMARY KEY,
+    dataset_id TEXT NOT NULL,
+    recipe_id TEXT,
+    kind TEXT NOT NULL,
+    status TEXT NOT NULL,
+    phase TEXT NOT NULL,
+    checkpoint_json JSONB NOT NULL DEFAULT '{}',
+    budget_json JSONB NOT NULL DEFAULT '{}',
+    metrics_json JSONB NOT NULL DEFAULT '{}',
+    paused BOOLEAN NOT NULL DEFAULT FALSE,
+    task_id TEXT,
+    trace_id TEXT,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+);
+CREATE TABLE IF NOT EXISTS dataset_recipes (
+    id TEXT PRIMARY KEY,
+    dataset_id TEXT NOT NULL,
+    version TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft',
+    body_json JSONB NOT NULL,
+    sample_report_json JSONB NOT NULL DEFAULT '{}',
+    verified BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+);
+CREATE TABLE IF NOT EXISTS dataset_edges (
+    id TEXT PRIMARY KEY,
+    src TEXT NOT NULL,
+    dst TEXT NOT NULL,
+    rel TEXT NOT NULL,
+    score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    provenance_json JSONB NOT NULL DEFAULT '{}',
+    auditor_status TEXT NOT NULL DEFAULT 'unreviewed',
+    created_at TIMESTAMPTZ NOT NULL
+);
+
 -- FTS via generated tsvector columns
 ALTER TABLE memory_nodes ADD COLUMN IF NOT EXISTS fts tsvector
     GENERATED ALWAYS AS (to_tsvector('simple', coalesce(title,'') || ' ' || coalesce(content,''))) STORED;
