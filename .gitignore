@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+backend/atlas-brain/data/
+backend/atlas-brain/target/
+frontend/node_modules/
+frontend/dist/
+.env
+.env.*
