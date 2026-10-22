@@ -8,6 +8,7 @@ mod knowledge;
 mod memory_api;
 mod models;
 mod platform_api;
+mod research_api;
 mod store_api;
 
 use crate::state::AppState;
@@ -138,4 +139,25 @@ pub fn router() -> Router<AppState> {
         .route("/v1/atlas/code/index", post(platform_api::index_code))
         .route("/v1/atlas/code/search", get(platform_api::search_code))
         .route("/v1/atlas/objects/{hash}", get(platform_api::get_object))
+        // Research plane — one-brain orchestrator (request-driven ticks)
+        .route(
+            "/v1/atlas/research/jobs",
+            get(research_api::list).post(research_api::create),
+        )
+        .route(
+            "/v1/atlas/research/jobs/{id}",
+            get(research_api::get),
+        )
+        .route(
+            "/v1/atlas/research/jobs/{id}/tick",
+            post(research_api::tick),
+        )
+        .route(
+            "/v1/atlas/research/jobs/{id}/pause",
+            post(research_api::pause),
+        )
+        .route(
+            "/v1/atlas/research/jobs/{id}/clarify",
+            post(research_api::clarify),
+        )
 }

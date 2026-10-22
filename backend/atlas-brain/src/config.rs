@@ -68,6 +68,17 @@ pub struct BrainConfig {
     pub default_project_id: String,
     /// Semantic cache TTL when using Redis (seconds).
     pub semantic_cache_ttl_secs: u64,
+
+    // --- Research plane ---
+    /// `stub` (offline corpus) | `http` (optional search endpoint)
+    pub research_search_provider: String,
+    /// Optional search HTTP endpoint (`?q=&limit=`) when provider=http.
+    pub research_search_url: String,
+    pub research_max_subagents: usize,
+    pub research_max_rounds: usize,
+    pub research_max_sources: usize,
+    /// Max request-driven ticks per job (budget guard).
+    pub research_max_ticks: usize,
 }
 
 impl Default for BrainConfig {
@@ -118,6 +129,12 @@ impl Default for BrainConfig {
             secrets_key: String::new(),
             default_project_id: String::new(),
             semantic_cache_ttl_secs: 3600,
+            research_search_provider: "stub".into(),
+            research_search_url: String::new(),
+            research_max_subagents: 4,
+            research_max_rounds: 2,
+            research_max_sources: 10,
+            research_max_ticks: 32,
         }
     }
 }

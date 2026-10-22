@@ -49,6 +49,7 @@ impl Store {
         store.migrate_agent_os_schema()?;
         store.migrate_eval_schema()?;
         store.migrate_platform_schema()?;
+        store.migrate_research_schema()?;
         let _ = store.migrate_messages_from_blobs()?;
         let _ = store.seed_builtin_tools()?;
         tracing::info!(engines = %store.engines.status_json(), "store plane engines");
