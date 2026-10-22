@@ -262,8 +262,21 @@ score = α·vector + β·bm25 + γ·recency + δ·salience + ε·graph_prior
 - Ingest pipeline → semantic memory nodes + `has_chunk` edges
 - APIs: `/v1/atlas/documents*` + search
 
-### Volgende: Milestone 3 (Agent OS)
-1. Tool registry + policy/capabilities
-2. Task/agent state + checkpoints
-3. Prompt/model registry versioning
-4. Daarna M4 eval-loop, M5 scale adapters
+### Milestone 3 — DONE
+- Tool registry (versioned schema + policy allow/deny/ask + capabilities)
+- Task state machine + checkpoints
+- Prompt versions + model registry (snapshot on settings PUT)
+- APIs: `/v1/atlas/tools*`, `/tasks*`, `/prompts*`, `/models/registry`
+
+### Milestone 4 — DONE
+- Eval cases + request-driven suite runner (scores + eval traces)
+- Feedback store; corrections → training_examples
+- Semantic cache (opt-in `semantic_cache_enabled`, invalidate on settings change)
+- APIs: `/v1/atlas/evals/*`, `/feedback`, `/training`, `/cache`
+
+### Volgende: Milestone 5 (Scale adapters)
+1. Store traits + Postgres backend (pgvector/FTS/JSONB)
+2. Redis adapter voor working/cache bij multi-instance
+3. S3/MinIO voor objects
+4. AGE/Neo4j alleen bij meetbare edge-scale
+5. Code/AST index plugin voor coding-workspace

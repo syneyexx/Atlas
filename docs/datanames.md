@@ -73,23 +73,36 @@ Stub-LM: deterministische distill uit brontekst.
 
 **Store:** `memory_nodes` · `memory_embeddings` · `working_memory` · `memory_edges` · FTS · `traces` · `outbox`
 
-### `store-plane` — Logische stores (plan → M0 done)
+### `store-plane` — Logische stores (plan → M0–M4 done)
 Wereldklasse stores-architectuur: **28 logische stores**, engines gefaseerd (SQLite → Postgres/Redis/S3).
 
 - **Plan:** `docs/plan-stores-architecture.md`
-- **M0 (shipped):** genormaliseerde `messages` · FTS5 (`messages_fts`, `memory_fts`) · `memory_edges` · `embedding_model_id`+`stale` · `traces` · `outbox`
-- **API:** `GET /v1/atlas/traces*` · `GET|POST /v1/atlas/outbox` · `GET|POST /v1/atlas/edges*`
+- **M0–M4 shipped** op SQLite; M5 = engine adapters bij schaal
+- **API surface:** traces · outbox · edges · documents · tools · tasks · prompts · models/registry · evals · feedback · training · cache
 - **Hybrid recall:** α·vector + β·lex + γ·BM25; hop-2 volgt edge-neighbors
-- **Chat:** response `atlas.trace_id` / `hit_ids` / `outbox_drained`; assistant message krijgt `trace_id`
-- **Niet nu:** Neo4j/Redis/Postgres tot schaal of multi-instance dat eist
-- **Outbox:** drain on chat (+ expliciete POST) — geen sweeper
+- **Outbox:** drain on chat/ingest (+ expliciete POST)
+
+### `agent-os` — Aansturing (M3)
+- **Tools:** versioned schemas + policy `allow|deny|ask` + capabilities; builtins seeded
+- **Tasks:** queue/running/blocked/completed + checkpoints (snapshot JSON)
+- **Prompts:** versioned `system_prompt`; snapshot on settings PUT
+- **Models:** registry synced from settings model_id
+
+### `improvement-loop` — Controle (M4)
+- **Evals:** cases + request-driven runner (`POST /v1/atlas/evals/run`) → scores + traces
+- **Feedback:** up/down/correction; corrections → training_examples
+- **Semantic cache:** opt-in (`semantic_cache_enabled`); invalidate on prompt/model change
+
+### `document-rag` — Document plane (M2)
+- Ingest: object hash (sha256) → chunks → semantic memory nodes + `has_chunk` edges
+- Search: FTS5 op chunks; recall via Memory Cortex (semantic heads)
 
 ### `knowledge-store` — Compat
 `/v1/atlas/knowledge*` → Write Governor / Cortex.
 
 ### `neural-pipeline`
 `brain/pipeline.rs` + `memory/cortex.rs` + `residual.rs`  
-Frames: SYSTEM_PROMPT → self → router? → semantic → episodic → working → conversation
+Frames: SYSTEM_PROMPT → self → router? → semantic → procedural → episodic → working → conversation
 
 ---
 
@@ -97,14 +110,12 @@ Frames: SYSTEM_PROMPT → self → router? → semantic → episodic → working
 
 | Naam | Intentie |
 |------|----------|
-| `document-rag` | Document store + FTS5 + vector hybrid |
-| `tool-registry` | Tool schemas, policy/capabilities, versioning |
-| `trace-eval-loop` | Traces → feedback → eval → training dataset |
+| `trace-eval-loop` | Traces → feedback → eval → training dataset (M4) |
+| `semantic-cache` | Answer reuse + invalidation (M4) |
 | `trading-engine` / workspaces / crawlers | Plugins |
 | `data-workspace` / `coding-workspace` | Later (+ code/AST index) |
 | `ethics-layer` / `security-layer` | Laatst |
 | `cnn-memory` / `rnn-episode` | Later |
-| `procedural` expert | Later |
 
 ---
 

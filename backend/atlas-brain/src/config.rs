@@ -45,6 +45,8 @@ pub struct BrainConfig {
     pub memory_auto_consolidate: bool,
     pub memory_auto_consolidate_min: usize,
     pub memory_write_episodic_on_chat: bool,
+    /// Opt-in semantic answer cache (invalidated via API / model change).
+    pub semantic_cache_enabled: bool,
 }
 
 impl Default for BrainConfig {
@@ -82,6 +84,7 @@ impl Default for BrainConfig {
             memory_auto_consolidate: false,
             memory_auto_consolidate_min: 3,
             memory_write_episodic_on_chat: true,
+            semantic_cache_enabled: false,
         }
     }
 }
@@ -103,6 +106,7 @@ pub struct PublicSettings {
     pub working_ttl_secs: u64,
     pub memory_auto_consolidate: bool,
     pub consolidate_prompt: String,
+    pub semantic_cache_enabled: bool,
 }
 
 impl From<&BrainConfig> for PublicSettings {
@@ -122,6 +126,7 @@ impl From<&BrainConfig> for PublicSettings {
             working_ttl_secs: c.working_ttl_secs,
             memory_auto_consolidate: c.memory_auto_consolidate,
             consolidate_prompt: c.consolidate_prompt.clone(),
+            semantic_cache_enabled: c.semantic_cache_enabled,
         }
     }
 }
@@ -142,6 +147,7 @@ pub struct PublicSettingsPatch {
     pub working_ttl_secs: Option<u64>,
     pub memory_auto_consolidate: Option<bool>,
     pub consolidate_prompt: Option<String>,
+    pub semantic_cache_enabled: Option<bool>,
 }
 
 impl BrainConfig {
@@ -234,6 +240,12 @@ impl BrainConfig {
         }
         if let Some(v) = patch.consolidate_prompt {
             self.consolidate_prompt = v;
+        }
+        if let Some(v) = patch.semantic_cache_enabled {
+            self.semantic_cache_enabled = v;
+            if !v {
+                // Turning cache off does not require wipe; explicit clear API exists.
+            }
         }
         self.save()
     }

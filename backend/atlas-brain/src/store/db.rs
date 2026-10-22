@@ -38,7 +38,10 @@ impl Store {
         store.migrate_memory_schema()?;
         store.migrate_store_plane_schema()?;
         store.migrate_documents_schema()?;
+        store.migrate_agent_os_schema()?;
+        store.migrate_eval_schema()?;
         let _ = store.migrate_messages_from_blobs()?;
+        let _ = store.seed_builtin_tools()?;
         Ok(store)
     }
 

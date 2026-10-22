@@ -3,6 +3,7 @@ pub mod consolidate;
 pub mod cortex;
 pub mod decay;
 pub mod embed;
+pub mod eval_runner;
 pub mod ingest;
 pub mod moe;
 pub mod residual;

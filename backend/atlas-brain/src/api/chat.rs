@@ -66,6 +66,43 @@ pub async fn chat_completions(
         .conversation_id
         .clone()
         .filter(|s| !s.is_empty());
+
+    let user_msg = conversation
+        .iter()
+        .rev()
+        .find(|m| m.role == "user")
+        .map(|m| m.content.as_str())
+        .unwrap_or("");
+    let cache_key = if cfg.semantic_cache_enabled {
+        Some(crate::api::eval_api::semantic_cache_key(
+            &cfg.model_id,
+            &cfg.system_prompt,
+            user_msg,
+        ))
+    } else {
+        None
+    };
+    if let Some(ref key) = cache_key {
+        if let Ok(Some(hit)) = state.store.cache_get(key) {
+            return Ok(Json(json!({
+                "id": format!("chatcmpl-{}", Uuid::new_v4()),
+                "object": "chat.completion",
+                "created": Utc::now().timestamp(),
+                "model": cfg.model_id,
+                "atlas": {
+                    "conversation_id": conversation_id,
+                    "cache_hit": true,
+                    "cache_key": key,
+                },
+                "choices": [{
+                    "index": 0,
+                    "message": { "role": "assistant", "content": hit.response },
+                    "finish_reason": "stop"
+                }]
+            })));
+        }
+    }
+
     let outcome = run_completion(
         &cfg,
         &state.store,
@@ -75,6 +112,11 @@ pub async fn chat_completions(
         conversation_id.as_deref(),
     )
     .await?;
+    if let Some(ref key) = cache_key {
+        let _ = state
+            .store
+            .cache_put(key, &outcome.answer, &cfg.model_id);
+    }
     let created = Utc::now().timestamp();
     let persist = body.persist.unwrap_or(true);
 

@@ -1,7 +1,9 @@
+mod agent_api;
 mod chat;
 mod config_api;
 mod conversations;
 mod documents;
+mod eval_api;
 mod knowledge;
 mod memory_api;
 mod models;
@@ -61,5 +63,58 @@ pub fn router() -> Router<AppState> {
         .route(
             "/v1/atlas/documents/{id}",
             get(documents::get).delete(documents::delete),
+        )
+        // Agent OS (M3)
+        .route(
+            "/v1/atlas/tools",
+            get(agent_api::list_tools).post(agent_api::upsert_tool),
+        )
+        .route(
+            "/v1/atlas/tools/{name}",
+            get(agent_api::get_tool).put(agent_api::patch_tool),
+        )
+        .route(
+            "/v1/atlas/tasks",
+            get(agent_api::list_tasks).post(agent_api::create_task),
+        )
+        .route("/v1/atlas/tasks/{id}", get(agent_api::get_task))
+        .route(
+            "/v1/atlas/tasks/{id}/checkpoint",
+            post(agent_api::checkpoint_task),
+        )
+        .route(
+            "/v1/atlas/tasks/{id}/status",
+            post(agent_api::set_task_status),
+        )
+        .route(
+            "/v1/atlas/prompts",
+            get(agent_api::list_prompts).post(agent_api::create_prompt),
+        )
+        .route("/v1/atlas/prompts/{id}", get(agent_api::get_prompt))
+        .route(
+            "/v1/atlas/prompts/{id}/activate",
+            post(agent_api::activate_prompt),
+        )
+        .route(
+            "/v1/atlas/models/registry",
+            get(agent_api::list_models_registry).post(agent_api::upsert_model_registry),
+        )
+        // Improvement loop (M4)
+        .route(
+            "/v1/atlas/evals/cases",
+            get(eval_api::list_cases).post(eval_api::upsert_case),
+        )
+        .route("/v1/atlas/evals/run", post(eval_api::run_suite))
+        .route("/v1/atlas/evals/runs", get(eval_api::list_runs))
+        .route(
+            "/v1/atlas/feedback",
+            get(eval_api::list_feedback).post(eval_api::post_feedback),
+        )
+        .route("/v1/atlas/training", get(eval_api::list_training))
+        .route(
+            "/v1/atlas/cache",
+            get(eval_api::cache_lookup)
+                .post(eval_api::cache_put)
+                .delete(eval_api::cache_clear),
         )
 }
