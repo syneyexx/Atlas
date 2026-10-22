@@ -5,7 +5,7 @@ use std::path::Path;
 use std::sync::Mutex;
 
 pub struct Store {
-    conn: Mutex<Connection>,
+    pub(crate) conn: Mutex<Connection>,
 }
 
 impl Store {
@@ -32,9 +32,11 @@ impl Store {
             );
             ",
         )?;
-        Ok(Self {
+        let store = Self {
             conn: Mutex::new(conn),
-        })
+        };
+        store.migrate_memory_schema()?;
+        Ok(store)
     }
 
     pub fn list_conversations(&self) -> AtlasResult<Vec<ConversationRecord>> {

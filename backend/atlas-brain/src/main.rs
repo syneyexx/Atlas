@@ -3,11 +3,13 @@ mod brain;
 mod config;
 mod error;
 mod lm;
+mod memory;
 mod state;
 mod store;
 
 use crate::config::BrainConfig;
 use crate::lm::LocalLmClient;
+use crate::memory::EmbedClient;
 use crate::state::AppState;
 use crate::store::Store;
 use axum::http::{HeaderValue, Method};
@@ -37,6 +39,7 @@ async fn main() {
         config: Arc::new(RwLock::new(config)),
         store: Arc::new(store),
         lm: LocalLmClient::new(),
+        embed: EmbedClient::new(),
     };
 
     let cors = build_cors(&cors_origins);
