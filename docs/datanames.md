@@ -139,6 +139,15 @@ Cursor-klasse data-OS op één brain: Hub/local acquisitie → schema-agent/reci
 - **UI:** `DatasetsWorkspace` onder Data → Datasets (`/#datasets`); console toont alleen Brain-events
 - **Productpositie:** onder Data naast Research (Research = web→rapport; Datasets = corpus→mix)
 
+### `strategy-lab` — Trading → Strategy Lab (plan)
+Autonoom strategielab op één brain: hypothese → DSL-spec → deterministische backtest → immutable poortwachter → bibliotheek → (later) paper/klein live.
+
+- **Plan:** `docs/plan-strategy-lab-architecture.md` (S0–S10)
+- **Status:** **PLAN** — UI out-of-scope; eerst contracts/stores/DSL/gates
+- **Invariants:** Research-achtige ticks; DSL + primitive allowlist (geen vrije strategy-code in discovery); gate pack + sealed holdout buiten LM-write; SQLite + `data/strategy/`; risk ceilings non-negotiable
+- **Stores (gepland):** market catalog/revisions/shards · specs · library · attempts · runs · gate_results · holdouts · edges · jobs/events · risk · decay
+- **Productpositie:** top-tab Trading (Lab eerst; Live Desk later). Zelfde brain als Data/Chat — geen aparte trading-daemon
+
 ### `knowledge-store` — Compat
 `/v1/atlas/knowledge*` → Write Governor / Cortex.
 
@@ -152,7 +161,7 @@ Frames: SYSTEM_PROMPT → self → router? → semantic → procedural → episo
 
 | Naam | Intentie |
 |------|----------|
-| `trading-engine` / workspaces / crawlers | Plugins op dezelfde brain |
+| `trading-engine` / Live Desk / crawlers | Na Strategy Lab S6+; plugins op dezelfde brain (zie `plan-strategy-lab-architecture.md`) |
 | `data-workspace` UI | Research + Datasets live onder Data |
 | `coding-workspace` UI | Product shell (code-index API al live) |
 | `pdf.read` / `code.sandbox` research tools | Fase 2 research tools |

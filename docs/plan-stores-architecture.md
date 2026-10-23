@@ -56,6 +56,8 @@ Optioneel later (niet in MVP): multi-device sync log, feature-flag experiments, 
 **Totaal logisch: 28 stores, nog steeds 1–4 engines.**
 
 > **Datasets-uitbreiding (plan):** stores 29–39 (catalog, revisions, shards, records, recipes, jobs, enrichment cache, dataset_edges, eval-guards, mixes) — zie `docs/plan-datasets-architecture.md`. Zelfde engine-filosofie; geen parallelle stack.
+>
+> **Strategy Lab-uitbreiding (plan):** stores 40–54 (market catalog/revisions/shards, specs, library, attempts, runs, gates, holdouts, sim/paper books, strategy_edges, risk, decay) — zie `docs/plan-strategy-lab-architecture.md`. Zelfde engine-filosofie; poortwachter als immutable code.
 
 ---
 
