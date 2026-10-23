@@ -2,6 +2,8 @@
 
 > Planmodus deliverable. Doel: onder **Trading** een **Strategy Lab** dat autonoom hypothesen formuleert, formaliseert, backtest, valideert en in een bibliotheek zet — op **één brain**, request-driven, met een **niet-omzeilbare poortwachter**.
 >
+> **Geldplafond (hard):** alleen **paper trading / nepgeld**. Geen echte orders, geen broker met echt kapitaal, geen `small_live` / `active` in deze horizon. Live money = expliciete non-goal (§18).
+>
 > **UI-graphics:** bewust out-of-scope. De Trading-pagina maak je later; dit plan is contracts, stores, DSL, validatiepijplijn, agentrollen en bouwvolgorde. De pagina is een view op die contracts.
 
 ---
@@ -15,29 +17,29 @@
 | Agent-OS: tools · tasks · checkpoints · policy | Hypothese-agent, coder, verifier; tool allow/deny |
 | Memory Cortex + procedural | “Wanneer pas ik wat toe”, lessen uit mislukkingen |
 | Evals · feedback · cost ledger · traces | Poortwachter-scores, attempt registry, kosten |
-| Artifacts · objects · projects · secrets | Spec hashes, backtest reports, broker keys later |
+| Artifacts · objects · projects · secrets | Spec hashes, backtest reports; geen echte broker-secrets nodig |
 | Engines (SQLite → dual Postgres · Redis · S3) | Metadata vs bulk resultaten |
 
-**Gap:** geen Strategy DSL, geen backtester, geen attempt/holdout registry, geen gatekeeper die het LM niet mag herschrijven, geen live/paper trading plane.
+**Gap:** geen Strategy DSL, geen backtester, geen attempt/holdout registry, geen gatekeeper die het LM niet mag herschrijven, geen **paper** trading plane.
 
-**Productpositie:** top-tab **Trading** → Strategy Lab (onderzoek) + later Live Desk (executie). Zelfde brain als Chat/Data/Coding. Geen aparte trading-microservice.
+**Productpositie:** top-tab **Trading** → Strategy Lab (onderzoek) + later **Paper Desk** (nepgeld-executie op streaming/delayed data). Zelfde brain als Chat/Data/Coding. Geen aparte trading-microservice. **Geen Live Desk in scope.**
 
 ---
 
 ## 1. Verdict op Claudes voorstel
 
-**Sterk als productvisie.** De vier datafases (ontdekken → stresstest → forward/paper → klein live), de onderzoekslus, de poortwachter (OOS, Deflated Sharpe, purged CV, holdout, aparte verifier), en de bibliotheek-metadata (hypothese, bewijs, status, regimes, correlaties) zijn precies het verschil tussen “mooie backtests” en een serieus lab.
+**Sterk als productvisie.** De datafases, onderzoekslus, poortwachter (OOS, Deflated Sharpe, purged CV, holdout, aparte verifier), en bibliotheek-metadata zijn precies het verschil tussen “mooie backtests” en een serieus lab. **Atlas-scope nu: fases 1–3 eindigen op paper/nepgeld.** Claudes fase 4 (echt geld) wordt bewust niet gebouwd.
 
-**Niet wereldklasse genoeg als je het 1:1 bouwt.** Acht fouten zouden Atlas (of je kapitaal) kapot maken:
+**Niet wereldklasse genoeg als je het 1:1 bouwt.** Acht fouten zouden Atlas kapot maken:
 
 | # | Claude-default / implicatie | Waarom fout voor Atlas | Expert-correctie |
 |---|----------------------------|------------------------|------------------|
 | 1 | Autonoom systeem “zoekt strategieën” met vrije code | Reward hacking: LM schrijft look-ahead of past validatie aan | **DSL-first**: uitvoerbare strategies alleen via gevalideerde YAML/JSON-spec + allowlisted primitives; poortwachter = **immutable code + sealed holdout**, niet een prompt |
-| 2 | GAN’s / diffusie / agent-based markten vroeg | Simulator bevat jouw aannames; bewijst geen edge; dure stack | Fase 1–2: **block-bootstrap + regime replay**; generatieve sim alleen S7+ achter meting |
+| 2 | GAN’s / diffusie / agent-based markten vroeg | Simulator bevat jouw aannames; bewijst geen edge; dure stack | Fase 1–2: **block-bootstrap + regime replay**; generatieve sim alleen S10 achter meting |
 | 3 | RL-omgeving over de hele lus als default | Background trainers, non-determinisme, split brain | Beloning = OOS-score in **eval store**; fine-tune/RL pas S8 als export uit bewezen trajectories |
 | 4 | Postgres + Parquet + graph als “bestaande opzet” letterlijk | Atlas is SQLite-first; graph = edge-tabel | Zelfde engines als Stores/Datasets: SQLite metadata → Parquet/JSONL results → Postgres dual |
 | 5 | Poortwachter als “tweede LLM die breekt” alleen | LLMs zijn omkoopbaar; reward hacking | Verifier-agent **mag alleen rapporteren**; gates zijn deterministische checks in Rust; LM heeft **geen write** op `gate_definitions` |
-| 6 | Live broker + risk in dezelfde iteratie als discovery | Slippage/kosten/kill-switch te laat = kapitaalrisico | Live/paper = **S6+**; risk engine hard-coded, niet LM-configureerbaar boven plafond |
+| 6 | Echt-geld broker in dezelfde roadmap | Onnodig risico; scope-creep vóór paper bewijs | **Paper only:** S6 Paper Desk + paper risk ceilings; **geen** live adapter, geen echte orders |
 | 7 | Papers (SSRN/arXiv) als idee-bron zonder ingest-plane | Geen pin, geen decontaminatie tegen eigen holdouts | Papers via Documents/Research → claim store; strategie citeert `source_ids` |
 | 8 | Pagina + lab tegelijk | UI zonder contracts = theater | Contracts + fixture backtest **vóór** Trading UI |
 
@@ -47,15 +49,15 @@
 
 ## 2. Wat er al goed is (behouden uit Claude)
 
-1. **Vier datafases** — historie → gesimuleerde stress → forward/paper → klein live.
+1. **Drie datafases in scope** — historie → gesimuleerde stress → forward/**paper (nepgeld)**.
 2. **Echte data ≠ bewijs van causaliteit; simulatie ≠ bewijs van winst** — beide nodig, verschillende rollen.
 3. **Onderzoekslus:** idee → formaliseer → implementeer → backtest → valideer → bibliotheek → reflectie.
 4. **Economische reden verplicht** — hypothese zonder “waarom zou dit werken?” → reject vóór compute.
 5. **Poortwachter-ideeën:** OOS/walk-forward, Deflated Sharpe + multiple testing, purged/embargoed CV, parameter-stabiliteit, regimes, capaciteit, look-ahead audit, verborgen holdout, aparte breaker.
-6. **Bibliotheekvelden:** spec+code hash, hypothese, bewijs, status lifecycle, voorwaarden, live-vs-expectatie, familie/correlatie.
-7. **Daytrade-toepassing later:** regime → allocator → signalen → risk (los) → executie → decay detection → dagelijkse review.
+6. **Bibliotheekvelden:** spec+code hash, hypothese, bewijs, status lifecycle, voorwaarden, paper-vs-expectatie, familie/correlatie.
+7. **Paper Desk later:** regime → allocator → signalen → paper risk → stub/simulatie-fills → decay detection → dagelijkse review.
 8. **Leren uit mislukkingen** via procedural memory.
-9. **Eerlijke kanttekeningen** — daytrade-kosten, arbitrage, paper vóór echt geld.
+9. **Eerlijke kanttekeningen** — daytrade-kosten, arbitrage; **blijf op paper** tot (ooit, buiten dit plan) bewijs dwingt anders.
 
 ---
 
@@ -73,10 +75,10 @@ Zonder dit bouw je een LLM die backtests hallucineert.
 | F | **Gate constitution (immutable)** | Gates in code + versioned `gate_pack_semver`; agents mogen packs **niet** muteren (policy deny). |
 | G | **Point-in-time / look-ahead auditor** | Automatische checks: geen future bars, geen restated fundamentals zonder as-of, geen same-bar leak. |
 | H | **Cost & fill model as first-class** | Spread, fee, slippage, partial fills — pin per run; “zero-cost” runs mogen nooit promoveren. |
-| I | **Promotion state machine** | `idea → specified → backtested → gated → paper → small_live → active → retired` met harde transitions. |
+| I | **Promotion state machine** | `idea → specified → backtested → gated → paper → retired|rejected` (papier is het plafond). |
 | J | **Portfolio correlation graph** | `strategy_edges` (family_of, correlates_with, conflicts_with, regime_fit). |
-| K | **Offline fixture market** | Tiny OHLCV + known edges/non-edges voor CI; stub broker. |
-| L | **Risk ceiling store** | Absolute caps (max DD, daily loss, notional) — buiten LM-bereik; kill switch API. |
+| K | **Offline fixture market** | Tiny OHLCV + known edges/non-edges voor CI; **paper** stub broker (nepgeld). |
+| L | **Paper risk ceiling store** | Caps op virtueel kapitaal (max DD, daily loss, notional) — buiten LM-bereik; paper kill switch. |
 
 ---
 
@@ -89,24 +91,24 @@ Zonder dit bouw je een LLM die backtests hallucineert.
 5. **Scope** — strategies default **project-scoped**; library cards mogen global-read binnen tenant.
 6. **Local dignity** — SQLite + `data/strategy/` + fixture bars + stub broker → full discovery path offline.
 7. **Engines follow scale** — taxonomy ≠ physical systems.
-8. **Secrets** — broker keys in secrets store; nooit in specs/traces/UI.
+8. **Secrets** — geen echte broker-credentials in dit plan; paper stub heeft geen secrets nodig.
 9. **UI honesty** — frontend verzint geen PnL; alleen Brain events/metrics.
 10. **Gate sovereignty** — model mag gate_pack, holdout, of attempt counts niet wijzigen of omzeilen (zelfde klasse als reward hacking).
-11. **Money is late** — geen echte orders vóór S6 + expliciete human arming.
+11. **Paper only** — **geen echte orders, ooit, in S0–S10.** Geen codepad dat een live broker kan armeren. Virtueel kapitaal only.
 12. **Source leidend** — docs volgen code zodra S0+ landt; tot die tijd is dit plan de source of intent.
 
 ---
 
 ## 5. Datafases (Claude behouden, Atlas-operationeel)
 
-| Fase | Data | Doel | Lab-status die het mag voeden | Bewijs-waarde |
-|------|------|------|-------------------------------|---------------|
-| **1 Ontdekken** | Historische echte bars (pinned) | Ideeën vinden/filteren | → `backtested` | Noodzakelijk, niet voldoende |
-| **2 Stresstest** | Block-bootstrap / regime shuffle van echte reeksen | Fragiliteit afwijzen | → `gated` (deel) | Negatief bewijs sterk; positief bewijs zwak |
-| **3 Forward / paper** | Live of delayed echte data, **nepgeld** | Bewijs op ongezien pad | → `paper` | Sterkste pre-money bewijs |
-| **4 Klein live** | Echt geld, harde notional-cap | Kosten/slippage meten | → `small_live` → `active` | Enige absolute waarheid over executie |
+| Fase | Data | Doel | Lab-status die het mag voeden | Bewijs-waarde | Scope |
+|------|------|------|-------------------------------|---------------|-------|
+| **1 Ontdekken** | Historische echte bars (pinned) | Ideeën vinden/filteren | → `backtested` | Noodzakelijk, niet voldoende | **IN** |
+| **2 Stresstest** | Block-bootstrap / regime shuffle van echte reeksen | Fragiliteit afwijzen | → `gated` (deel) | Negatief bewijs sterk; positief bewijs zwak | **IN** |
+| **3 Forward / paper** | Live of delayed echte data, **nepgeld** | Bewijs op ongezien pad | → `paper` | Sterkste bewijs in dit plan | **IN — plafond** |
+| **4 Klein live** | Echt geld | — | — | — | **OUT — non-goal** |
 
-**Regel:** een strategie die **alleen** fase 2 overleeft → automatisch `retired` of `rejected`. Promotie vereist fase 1 **én** 2; live vereist fase 3 stabiel onder decay-monitor.
+**Regel:** een strategie die **alleen** fase 2 overleeft → automatisch `retired` of `rejected`. Promotie naar `paper` vereist fase 1 **én** 2 (+ holdout). Er is **geen** promotie voorbij `paper`.
 
 ---
 
@@ -127,10 +129,10 @@ Nieuwe logische stores — **zelfde 1–4 engines**.
 | 48 | **Gate results** | Per gate_pack_semver: pass/fail, scores, evidence refs |
 | 49 | **Holdout vault** | Sealed ranges; unlock events (one-shot per family) |
 | 50 | **Simulation runs** | Bootstrap/regime stress configs + metrics |
-| 51 | **Paper / live books** | Virtual or real positions, fills, slippage vs model |
+| 51 | **Paper books** | Virtuele positions, fills, slippage vs model (nepgeld only) |
 | 52 | **Strategy edges** | family_of · correlates_with · conflicts_with · derived_from · regime_fit |
-| 53 | **Risk ceiling & incidents** | Caps, breaches, kill-switch state |
-| 54 | **Decay monitors** | Live vs backtest expectation bands; pause triggers |
+| 53 | **Paper risk ceiling & incidents** | Virtuele caps, breaches, paper kill-switch |
+| 54 | **Decay monitors** | Paper vs backtest expectation bands; pause triggers |
 
 **Mapping op bestaande stores:** objects (bar shards, reports), artifacts (spec snapshots, gate reports), tasks/checkpoints (lab job ticks), traces/costs, secrets (brokers), projects (scope), procedural memory (lessons), evals (gate golden cases), documents/research (papers → claims).
 
@@ -144,7 +146,7 @@ Nieuwe logische stores — **zelfde 1–4 engines**.
 | **T-B Local+** | DuckDB/Polars voor snelle walk-forward aggregaties; sqlite-vec voor paper/claim search | Meetbare query-pijn |
 | **T-C Team** | Postgres dual-write metadata · S3 result shards · Redis optional job lease | Multi-instance |
 | **T-D Sim scale** | Optionele sim workers **als adapter** (niet default daemon) | Alleen bij zware stress grids |
-| **T-E Live** | Broker adapters achter trait; risk engine in-process; never LM in order path | S6+ |
+| **T-E Paper desk** | Paper broker stub + paper risk engine in-process; never LM in order path; **geen live broker trait** | S6–S7 |
 
 **Default compute:** deterministische bar-replay engine in Rust (of Wasm-sandboxed formula IR). **Geen** unrestricted `eval(python)` in discovery path.
 
@@ -231,7 +233,7 @@ meta:
 | `cross_above` / `threshold` | entry helper | Compiles into entry AST |
 | `fixed_notional` / `vol_target` | sizing | Caps enforced by risk ceiling |
 | `fixture_taker_v1` / `maker_rebate_v0` | cost | |
-| `market` / `limit_touch` | execution (paper/live) | Live only via broker trait |
+| `market` / `limit_touch` | execution (paper) | Paper stub fills only; geen live broker |
 
 Nieuwe primitive = PR + golden eval bars + gate that forbids silent look-ahead.
 
@@ -254,11 +256,11 @@ Elke tick: 1..N step-units binnen budget; events append-only; stop op gate fail,
 ### 8.5 Promotion machine (apart van lab job)
 
 ```
-idea → specified → backtested → gated → paper → small_live → active → retired
+idea → specified → backtested → gated → paper → retired
          ↘ rejected at any hard gate
 ```
 
-Transitions vereisen bewijs-artifact IDs. `active` vereist armed risk ceiling + human ack.
+Transitions vereisen bewijs-artifact IDs. **`paper` is terminal success-state** (nepgeld desk). Statussen `small_live` / `active` bestaan niet in schema of API.
 
 ---
 
@@ -287,9 +289,9 @@ Policy: tools `strategy.gates.update`, `strategy.holdout.unseal` (behalve contro
 | `G_purged` | Purged/embargoed CV mean ≥ floor; worst fold not catastrophic | reject |
 | `G_stable` | Local param perturbation (±ε) keeps sign of edge / limited metric drop | reject |
 | `G_regime` | Not single-regime only (unless declared niche + capacity ok) | warn or reject by mode |
-| `G_capacity` | Adv. volume / participation ≤ cap | reject for live track |
+| `G_capacity` | Adv. volume / participation ≤ cap (paper sizing sanity) | reject for paper track |
 | `G_stress` | Block-bootstrap / regime stress: median OOS not negative; tail DD bounded | reject |
-| `G_holdout` | Sealed holdout unlock once → pass band | required for `gated→paper` |
+| `G_holdout` | Sealed holdout unlock once → pass band | required for `gated→paper` (eindstation) |
 | `G_verifier` | Breaker agent findings severity < threshold | reject if critical |
 
 **Deflated Sharpe (Bailey & López de Prado):** gebruik family attempt count, niet “alleen de winnaars”. Attempt rows zijn append-only.
@@ -350,7 +352,7 @@ Mislukkingen zijn first-class: `status=rejected` + lesson node blijft doorzoekba
 | **Breaker / verifier agent** | Adversarial critique | evidence notes only |
 | **Reflector** | Lessons → procedural memory | memory via governor |
 | **Risk engine** | Caps, kill switch | risk store only — **no LM** |
-| **Human** | Holdout unlock, arm live, budget overrides | approvals |
+| **Human** | Holdout unlock, paper session arm, budget overrides | approvals |
 
 Subagents = child tasks (`parent_id`), zelfde patroon als Research.
 
@@ -392,12 +394,13 @@ GET  /v1/atlas/strategy/holdouts
 POST /v1/atlas/strategy/holdouts/{id}/request_unlock   # → await_approval
 POST /v1/atlas/strategy/holdouts/{id}/unlock           # human
 
-# Promotion & paper/live (later milestones)
-POST /v1/atlas/strategy/library/{id}/promote
+# Promotion & paper (nepgeld — plafond)
+POST /v1/atlas/strategy/library/{id}/promote          # max status: paper
 POST /v1/atlas/strategy/paper/sessions
 POST /v1/atlas/strategy/paper/{id}/tick
-POST /v1/atlas/strategy/risk/arm
-POST /v1/atlas/strategy/risk/kill
+POST /v1/atlas/strategy/paper/risk/arm                # virtueel kapitaal
+POST /v1/atlas/strategy/paper/risk/kill
+# GEEN /live/* endpoints in dit plan
 
 # Graph
 GET  /v1/atlas/strategy/edges…
@@ -406,7 +409,7 @@ GET  /v1/atlas/strategy/library/{id}/neighbors
 # MCP mirrors of the above tools
 ```
 
-Mutaties: traces + outbox (`strategy.job.created`, `strategy.gate.failed`, `strategy.promoted`, `strategy.risk.killed`, …).
+Mutaties: traces + outbox (`strategy.job.created`, `strategy.gate.failed`, `strategy.promoted`, `strategy.paper.risk.killed`, …).
 
 ---
 
@@ -441,7 +444,7 @@ strategy_specs (
 );
 strategy_library (
   id TEXT PK, spec_id TEXT NOT NULL, code_hash TEXT,
-  status TEXT NOT NULL, -- idea|specified|backtested|gated|paper|small_live|active|retired|rejected
+  status TEXT NOT NULL, -- idea|specified|backtested|gated|paper|retired|rejected
   regime_fit_json TEXT, conditions_json TEXT,
   parent_id TEXT, -- family lineage
   created_at TEXT, updated_at TEXT
@@ -460,7 +463,7 @@ strategy_attempts (
 -- Runs & results
 strategy_runs (
   id TEXT PK, run_key TEXT UNIQUE, attempt_id TEXT NOT NULL,
-  kind TEXT, -- backtest|stress|paper|live
+  kind TEXT, -- backtest|stress|paper  (geen live)
   engine_semver TEXT, gate_pack_semver TEXT,
   config_json TEXT, seed INTEGER,
   status TEXT, metrics_json TEXT,
@@ -528,18 +531,18 @@ Bulk equity curves / trade lists: Parquet of JSONL under `data/strategy/runs/{ru
 
 ---
 
-## 14. Daytrading-toepassing (later — niet S0)
+## 14. Paper Desk (later — S6/S7; nog steeds nepgeld)
 
-Pas ná library `gated` + paper stability:
+Pas ná library `gated` + human holdout unlock. Alles hieronder draait op **virtueel kapitaal**.
 
 | Component | Rol | Constraint |
 |-----------|-----|------------|
-| Regime detector | Kiest passende library subset | Read-only op live features |
-| Portfolio allocator | Lage correlatie via `strategy_edges` | Risk ceiling hard cap |
+| Regime detector | Kiest passende library subset | Read-only op streaming/delayed features |
+| Portfolio allocator | Lage correlatie via `strategy_edges` | Paper risk ceiling hard cap |
 | Signal generator | Streaming bars → DSL runner | Same engine as backtest |
-| Risk engine | Size, daily loss, max DD, kill | **Geen LM in path** |
-| Broker adapter | Orders + fill/slippage log | Secrets; stub first |
-| Decay monitor | Live vs expectatie → auto-pause | Writes monitor status |
+| Paper risk engine | Size, daily loss, max DD, kill | **Geen LM in path**; virtueel only |
+| Paper broker stub | Sim-fills + slippage log | Geen echte broker API; geen secrets |
+| Decay monitor | Paper vs expectatie → auto-pause | Writes monitor status |
 | Daily review | Journal → new hypotheses | Feeds idea agent |
 
 ---
@@ -560,7 +563,7 @@ Wanneer Trading UI landt, zones met **één job per sectie**:
 1. **Lab console** — job events, phase, budgets, tick/pause (Research-achtig).
 2. **Library** — status filters; card = hypothese + rationale + evidence chips (geen fake PnL).
 3. **Evidence drawer** — runs, gates, stress, holdout state.
-4. **Live desk (later)** — paper/live, risk armed state, decay — bewust níet in eerste viewport van Lab.
+4. **Paper desk (later)** — nepgeld sessies, paper risk armed, decay — bewust níet in eerste viewport van Lab.
 
 UI leest uitsluitend API; mag sealed holdout ranges niet tonen vóór unlock.
 
@@ -605,15 +608,15 @@ Afhankelijkheden dwingen volgorde. **Niets weggelaten** — wel pas materialiser
 - Strategy edges + evidence bundle API
 - **Done when:** second unlock denied; promotion requires full gate pack + holdout
 
-### S6 — Paper trading (fase 3)
-- Stub broker + streaming fixture/live delayed feed
-- Paper book, slippage monitor, decay monitor v0
-- **Done when:** paper session ticks request-driven; decay can pause
+### S6 — Paper trading (fase 3 — plafond)
+- Paper stub broker + streaming fixture / delayed echte feed
+- Paper book (nepgeld), slippage monitor, decay monitor v0
+- **Done when:** paper session ticks request-driven; decay can pause; **geen live order path bestaat**
 
-### S7 — Risk ceilings + small live adapter (fase 4)
-- Hard caps; kill switch; broker trait + one paper-equal adapter
-- Human arm required; notional micro-cap
-- **Done when:** breach → kill; LM tools cannot raise ceilings
+### S7 — Paper risk ceilings (hardening)
+- Virtuele hard caps; paper kill switch; allocator op paper book
+- Human arm voor paper session; virtueel notional-cap
+- **Done when:** breach → paper kill; LM tools cannot raise ceilings; compile/link bevat **geen** live-broker feature
 
 ### S8 — Learning export
 - Rejected/successful trajectories → procedural + optional Datasets mix
@@ -633,13 +636,14 @@ Afhankelijkheden dwingen volgorde. **Niets weggelaten** — wel pas materialiser
 
 ## 18. Non-goals (bewust)
 
+- **Geen live money / echte orders / echte broker-adapters** — niet in S0–S10, niet “later in dezelfde PR-reeks”. Paper/nepgeld is het plafond.
+- Geen statussen `small_live` of `active` in schema/API.
 - Geen aparte trading-microservice, optimizer-daemon, of RL trainer in S0–S7.
 - Geen unrestricted strategy code execution in discovery.
 - Geen Neo4j/Ray/Kafka defaults.
-- Geen echte orders vóór S7 + human arm.
 - Geen pixel-UI in deze planfase.
 - Geen “Sharpe zonder kosten” als promotie-metric.
-- Geen ethiek-theater; wél risk ceilings + audit als technische gates.
+- Geen ethiek-theater; wél paper risk ceilings + audit als technische gates.
 - Geen silent market redownload — altijd revision pin.
 
 ---
@@ -672,15 +676,16 @@ Afhankelijkheden dwingen volgorde. **Niets weggelaten** — wel pas materialiser
 | Poortwachter | Immutable Rust gate pack + sealed holdout; breaker LM read-only |
 | Multiple testing | Append-only `strategy_attempts` + Deflated Sharpe |
 | Simulatie | Block-bootstrap/regime eerst; generative later optional |
-| Money | Paper S6 → small live S7; risk ceilings non-negotiable |
+| Money | **Paper/nepgeld only** (S6–S7); live money = non-goal |
+| Paper risk | Virtuele ceilings non-negotiable; LM kan ze niet verhogen |
 | UI | Contract-first; Trading page later |
-| Claudes scope | Capability map behouden; runtime Atlas-first |
+| Claudes scope | Fases 1–3 + lab behouden; fase 4 (echt geld) geschrapt |
 
 ---
 
 ## 21. Kritiek op Claude — samenvatting in één alinea
 
-Claude tekende het juiste **lab** (fases, lus, poortwachter-ideeën, bibliotheek) maar liet de **constitution** te zacht: een LLM die zelf zoekt zal zonder DSL-allowlist, attempt registry, sealed holdout en immutable gates vooral overfit-theater produceren — en “verifier agent” alleen is omkoopbaar. Dit plan houdt zijn onderzoekslus en datafases intact, dwingt Research-achtige ticks af, hergebruikt Store/Datasets-kapitaal, en maakt de poortwachter tot code + crypto-seal die het model niet mag herschrijven — zodat Strategy Lab autonoom mag **zoeken**, maar niet mag **liegen**.
+Claude tekende het juiste **lab** (fases, lus, poortwachter-ideeën, bibliotheek) maar liet de **constitution** te zacht: een LLM die zelf zoekt zal zonder DSL-allowlist, attempt registry, sealed holdout en immutable gates vooral overfit-theater produceren — en “verifier agent” alleen is omkoopbaar. Dit plan houdt zijn onderzoekslus en fases 1–3 intact, **stopt hard bij paper/nepgeld** (geen fase-4 live money), dwingt Research-achtige ticks af, hergebruikt Store/Datasets-kapitaal, en maakt de poortwachter tot code + crypto-seal die het model niet mag herschrijven — zodat Strategy Lab autonoom mag **zoeken**, maar niet mag **liegen** en niet mag **handelen met echt geld**.
 
 ---
 
@@ -694,10 +699,11 @@ Claude tekende het juiste **lab** (fases, lus, poortwachter-ideeën, bibliotheek
 | S3 | Gate pack v0 | PLAN |
 | S4 | Stress (bootstrap/regime) | PLAN |
 | S5 | Holdout + library promotion | PLAN |
-| S6 | Paper trading + decay | PLAN |
-| S7 | Risk ceilings + small live adapter | PLAN |
+| S6 | Paper trading (nepgeld) + decay | PLAN |
+| S7 | Paper risk ceilings (geen live) | PLAN |
 | S8 | Learning export / reflector | PLAN |
-| S9 | Trading UI (Strategy Lab) | PLAN |
+| S9 | Trading UI (Strategy Lab + Paper Desk) | PLAN |
 | S10 | Scale / generative sim adapters | PLAN (optioneel) |
+| — | Live money / echte broker | **NON-GOAL** |
 
 > Na elke implementatie-werkbeurt: deze tabel + `docs/datanames.md` + `docs/filenames.md` bijwerken. **Source (code) is leidend.**

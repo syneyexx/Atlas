@@ -57,7 +57,7 @@ Optioneel later (niet in MVP): multi-device sync log, feature-flag experiments, 
 
 > **Datasets-uitbreiding (plan):** stores 29–39 (catalog, revisions, shards, records, recipes, jobs, enrichment cache, dataset_edges, eval-guards, mixes) — zie `docs/plan-datasets-architecture.md`. Zelfde engine-filosofie; geen parallelle stack.
 >
-> **Strategy Lab-uitbreiding (plan):** stores 40–54 (market catalog/revisions/shards, specs, library, attempts, runs, gates, holdouts, sim/paper books, strategy_edges, risk, decay) — zie `docs/plan-strategy-lab-architecture.md`. Zelfde engine-filosofie; poortwachter als immutable code.
+> **Strategy Lab-uitbreiding (plan):** stores 40–54 (market catalog/revisions/shards, specs, library, attempts, runs, gates, holdouts, paper books, strategy_edges, paper risk, decay) — zie `docs/plan-strategy-lab-architecture.md`. Paper/nepgeld only; poortwachter als immutable code.
 
 ---
 

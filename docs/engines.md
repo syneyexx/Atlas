@@ -74,6 +74,6 @@ Zie `docs/plan-strategy-lab-architecture.md`. **Geen nieuwe default-engines in S
 | Specs / attempts / gates / library | SQLite (zelfde brain DB); Postgres dual zoals stores | Dual-write mirrors |
 | Backtest / stress / paper results | JSONL/Parquet onder `data/strategy/` (+ object hashes) | S3/MinIO |
 | Graph | `strategy_edges` SQL | AGE/Neo4j alleen bij meetbare edge-scale |
-| Compute | In-process deterministische bar-replay + ticks | Optionele sim/broker adapters |
+| Compute | In-process deterministische bar-replay + ticks | Optionele sim + **paper** stub adapters |
 
-Orchestratie: request-driven (`POST …/strategy/jobs/{id}/tick`) — geen optimizer/RL-daemon. Poortwachter = immutable gate pack in code; LM mag gates/holdouts/attempts niet muteren.
+Orchestratie: request-driven (`POST …/strategy/jobs/{id}/tick`) — geen optimizer/RL-daemon. Poortwachter = immutable gate pack in code; LM mag gates/holdouts/attempts niet muteren. **Paper/nepgeld only** — geen live-broker engine.
