@@ -64,3 +64,16 @@ Zie `docs/plan-datasets-architecture.md`. **Geen nieuwe default-engines in D0–
 Config: `datasets_hub_provider` (`stub`\|`http`) · `datasets_max_ticks` · `datasets_disk_budget_bytes` · `datasets_max_cost_usd`.
 
 Orchestratie: request-driven (`POST …/datasets/jobs/{id}/tick`) — geen Dagster/Prefect/worker-daemon.
+
+## Strategy Lab plane (S0–S10 — plan)
+
+Zie `docs/plan-strategy-lab-architecture.md`. **Geen nieuwe default-engines in S0–S5.**
+
+| Domein | Default (plan) | Later (S7+/S10) |
+|--------|----------------|-----------------|
+| Specs / attempts / gates / library | SQLite (zelfde brain DB); Postgres dual zoals stores | Dual-write mirrors |
+| Backtest / stress / paper results | JSONL/Parquet onder `data/strategy/` (+ object hashes) | S3/MinIO |
+| Graph | `strategy_edges` SQL | AGE/Neo4j alleen bij meetbare edge-scale |
+| Compute | In-process deterministische bar-replay + ticks | Optionele sim + **paper** stub adapters |
+
+Orchestratie: request-driven (`POST …/strategy/jobs/{id}/tick`) — geen optimizer/RL-daemon. Poortwachter = immutable gate pack in code; LM mag gates/holdouts/attempts niet muteren. **Paper/nepgeld only** — geen live-broker engine.
